@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Sparkles, ArrowUpRight, Check, Activity, Workflow, BarChart3, Cpu } from "lucide-react";
+import { ArrowRight, Sparkles, ArrowUpRight, Check, Activity, Workflow, BarChart3, Cpu, Lightbulb } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 function Reveal({ children, delay = 0 }) {
@@ -244,9 +244,10 @@ export default function Landing() {
               { n: "02", t: "AI Diagnostics", d: "Detect anomalies, identify probable causes and surface confidence-backed findings.", i: Sparkles, cta: "Explore AI Intelligence" },
               { n: "03", t: "Intelligent Operations", d: "Turn AI findings into prioritized actions for field and operations teams.", i: Workflow, cta: "Explore Operations" },
               { n: "04", t: "AI Reporting", d: "Generate owner, technician and compliance reports from a single intelligence pipeline.", i: BarChart3, cta: "Explore Reporting" },
+              { n: "05", t: "AI Recommended Actions", d: "Every finding ships with a next-best-action operators can accept in one click.", i: Lightbulb, cta: "Explore Actions", accent: true },
             ].map((c, i) => (
               <Reveal key={c.n} delay={i * 100}>
-                <div className="gs-card p-8 h-full">
+                <div className={`p-8 h-full ${c.accent ? "gs-card-accent md:col-span-2" : "gs-card"}`}>
                   <div className="flex items-start justify-between">
                     <div className="w-11 h-11 rounded-xl bg-[color:var(--brand-tint)] text-[color:var(--brand-3)] flex items-center justify-center">
                       <c.i size={18} />
@@ -255,7 +256,7 @@ export default function Landing() {
                   </div>
                   <h3 className="font-display text-2xl mt-8 text-[color:var(--ink)]">{c.t}</h3>
                   <p className="text-sm mt-3 text-[color:var(--ink-2)]">{c.d}</p>
-                  <Link to="/platform" className="mt-6 inline-flex items-center gap-1 text-sm text-[color:var(--brand-3)] hover:text-[color:var(--brand)] transition">
+                  <Link to="/solutions" className="mt-6 inline-flex items-center gap-1 text-sm text-[color:var(--brand-3)] hover:text-[color:var(--brand)] transition">
                     {c.cta} <ArrowRight size={14} />
                   </Link>
                 </div>
