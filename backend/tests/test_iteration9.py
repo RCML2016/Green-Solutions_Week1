@@ -30,14 +30,14 @@ class TestActions:
         {"finding_code": "", "finding_title": "T", "action_text": "x"},
         {"finding_code": "INV-04", "finding_title": "T", "action_text": ""},
     ])
-    def test_actions_validation(self, api, normal_user, payload):
-        r = requests.post(f"{api}/actions", json=payload, headers=normal_user["headers"], timeout=30)
+    def test_actions_validation(self, api, writer_user, payload):
+        r = requests.post(f"{api}/actions", json=payload, headers=writer_user["headers"], timeout=30)
         assert r.status_code == 422, f"{payload} -> {r.status_code} {r.text[:200]}"
 
-    def test_create_and_list_action(self, api, normal_user):
+    def test_create_and_list_action(self, api, writer_user):
         body = {"finding_code": "TEST_INV-04", "finding_title": "TEST_ Communication Dropout",
                 "action_text": "TEST_ Dispatch tech to inverter 4."}
-        r = requests.post(f"{api}/actions", json=body, headers=normal_user["headers"], timeout=30)
+        r = requests.post(f"{api}/actions", json=body, headers=writer_user["headers"], timeout=30)
         assert r.status_code == 200, r.text
         d = r.json()
         assert "_id" not in d
@@ -48,7 +48,7 @@ class TestActions:
         assert d["status"] == "accepted"
         assert d["created_at"]
 
-        g = requests.get(f"{api}/actions", headers=normal_user["headers"], timeout=30)
+        g = requests.get(f"{api}/actions", headers=writer_user["headers"], timeout=30)
         assert g.status_code == 200, g.text
         items = g.json()
         assert isinstance(items, list)
@@ -57,10 +57,10 @@ class TestActions:
         assert "_id" not in match[0]
         assert match[0]["action_text"] == body["action_text"]
 
-    def test_actions_scoped_per_user(self, api, normal_user, admin_headers):
+    def test_actions_scoped_per_user(self, api, writer_user, admin_headers):
         body = {"finding_code": "TEST_SCOPE", "finding_title": "TEST_scope",
                 "action_text": "TEST_ should not be visible to admin"}
-        r = requests.post(f"{api}/actions", json=body, headers=normal_user["headers"], timeout=30)
+        r = requests.post(f"{api}/actions", json=body, headers=writer_user["headers"], timeout=30)
         assert r.status_code == 200
         aid = r.json()["id"]
         g = requests.get(f"{api}/actions", headers=admin_headers, timeout=30)
@@ -198,12 +198,12 @@ class TestWeeklyDigest:
     def test_digest_requires_auth(self, api):
         assert requests.post(f"{api}/reports/weekly-digest", timeout=30).status_code in (401, 403)
 
-    def test_digest_generation(self, api, normal_user):
+    def test_digest_generation(self, api, writer_user):
         # seed one action so actions_count >= 1
         requests.post(f"{api}/actions", json={
             "finding_code": "TEST_DIG", "finding_title": "TEST_digest finding",
-            "action_text": "TEST_ Clean array row 3."}, headers=normal_user["headers"], timeout=30)
-        r = requests.post(f"{api}/reports/weekly-digest", headers=normal_user["headers"], timeout=120)
+            "action_text": "TEST_ Clean array row 3."}, headers=writer_user["headers"], timeout=30)
+        r = requests.post(f"{api}/reports/weekly-digest", headers=writer_user["headers"], timeout=120)
         assert r.status_code == 200, f"{r.status_code} {r.text[:400]}"
         d = r.json()
         assert d["ok"] is True

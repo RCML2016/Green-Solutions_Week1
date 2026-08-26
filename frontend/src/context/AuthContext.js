@@ -34,18 +34,18 @@ export function AuthProvider({ children }) {
       const { data } = await api.post("/auth/login", { email, password });
       localStorage.setItem("gs_token", data.access_token);
       setUser(data.user);
-      return { ok: true };
+      return { ok: true, user: data.user };
     } catch (e) {
       return { ok: false, error: formatApiError(e) };
     }
   };
 
-  const register = async (name, email, password) => {
+  const register = async (name, email, password, role = "executive") => {
     try {
-      const { data } = await api.post("/auth/register", { name, email, password });
+      const { data } = await api.post("/auth/register", { name, email, password, role });
       localStorage.setItem("gs_token", data.access_token);
       setUser(data.user);
-      return { ok: true };
+      return { ok: true, user: data.user };
     } catch (e) {
       return { ok: false, error: formatApiError(e) };
     }

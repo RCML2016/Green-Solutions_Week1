@@ -33,9 +33,12 @@ def test_credentials():
     c = p.read_text(encoding="utf-8")
     e = re.search(r'(?im)^\s*(?:[-*]\s*)?(?:\*\*)?email(?:\*\*)?\s*:\s*`?([^`\s]+)', c)
     pw = re.search(r'(?im)^\s*(?:[-*]\s*)?(?:\*\*)?password(?:\*\*)?\s*:\s*`?([^`\s]+)', c)
-    if not e or not pw:
-        pytest.skip("No creds found")
-    return {"email": e.group(1), "password": pw.group(1)}
+    if e and pw:
+        return {"email": e.group(1), "password": pw.group(1)}
+    row = re.search(r'\|\s*`([^`]+@[^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*admin\s*\|', c)
+    if row:
+        return {"email": row.group(1), "password": row.group(2)}
+    pytest.skip("No creds found")
 
 
 @pytest.fixture(scope="session")

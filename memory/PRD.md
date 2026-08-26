@@ -51,55 +51,54 @@
 5. Dashboard powered by real seeded dataset (no random jitter).
 6. Site Detail drill-down at `/site/:site_id`.
 
-## What's been implemented (Feb 2026, iteration 11)
+## What's been implemented (Feb 2026, iteration 12)
 
-### Backend (routers + fleet APIs)
+### Backend (routers + fleet APIs + RBAC)
 - Refactored monolithic `server.py` (890 lines) into thin entry + 4 routers.
 - Idempotent XLSX → Mongo seed on startup (7 collections, ~76k documents).
-- 9 new `/api/fleet/*` endpoints:
-  - `GET /categories` — 8-category priority summary with counts & capacity.
-  - `GET /kpis[?category=]` — fleet KPIs (empty-scope guard).
-  - `GET /sites[?category=&state=&search=&limit=&skip=]` — paginated site list with
-    latest PR%, availability, open alarms.
-  - `GET /sites/{site_id}` — full detail (assets, breakdown, perf, weather, alarms, WOs).
-  - `GET /telemetry?site_id=&hours=` — per-timestamp aggregated sliding window.
-  - `GET /alarms[?severity=&status=&root_cause=&site_id=&category=]` — with root-cause
-    breakdown; supports Low/Medium/High/Critical.
-  - `GET /work-orders[?status=&site_id=&category=]` — with status breakdown.
-  - `GET /states[?category=]` — state-level rollup.
-  - `GET /performance/trend?site_id=&days=` — daily performance history.
-- `GET /api/healthz` — reports `fleet_sites` count.
-- All legacy endpoints preserved (`/portfolio/metrics`, `/portfolios`, `/alerts`,
-  `/snapshots`, `/actions`, `/reports/*`, `/team/*`, `/ai/insight` SSE, `/auth/*`).
+- 9 new `/api/fleet/*` endpoints (categories, kpis, sites, telemetry sliding window,
+  alarms, work orders, states, performance trend, site detail).
+- **RBAC (iteration 12)** — 5 MVP roles: `admin`, `executive`, `asset_manager`,
+  `om_manager`, `technician` (legacy `user` auto-migrated to `executive` at startup).
+  `rbac.role_required(...)` guards on `/alerts`, `/actions`, `/team/*`. Admin is a
+  super-role. New endpoints: `GET /api/rbac/landing` (public map), `PATCH
+  /api/team/users/{id}/role` (admin only). 4 demo accounts seeded on startup + junk
+  test accounts auto-purged.
 
 ### Frontend
-- `Dashboard.jsx` rewritten as a slim orchestrator (`~180 lines`).
-- New dashboard components: `CategorySwitcher`, `FleetKpiCards` (6 real KPIs),
-  `SitesTable` (with search + drill-down links), `AlarmsFeed` (severity + root-cause),
-  `WorkOrdersCard` (status breakdown), `AiInsightPanel` (extracted).
-- `SiteDetail.jsx` — new drill-down page with 4 KPI cards, telemetry chart (24h
-  aggregated), asset breakdown, alarms, work orders.
+- `Dashboard.jsx` rewritten as slim orchestrator; extracted `CategorySwitcher`,
+  `FleetKpiCards`, `SitesTable`, `AlarmsFeed`, `WorkOrdersCard`, `AiInsightPanel`.
+- `SiteDetail.jsx` drill-down page (assets, telemetry chart, alarms, WOs).
 - Theme reverted to origin palette (bright white + emerald green).
-- Onboarding tour steps updated to new testids; login copy fixed to reflect real fleet
-  size (380 sites · 5,473 assets).
-- Category filter now scopes KPIs + Sites + Alarms + Work Orders consistently.
-- Critical severity supported in AlarmsFeed + SiteDetail.
+- **Role-based navigation (iteration 12)** — `/app/frontend/src/lib/roles.js` defines
+  `NAV`, `LANDING`, `visibleItems()`, `landingFor()`. Sidebar is role-scoped. Login
+  redirects to the role's default landing. Register form has a role picker.
+- 4 new role-specific landing pages: `ExecutiveOverview`, `OperationsCenter`, `MyWork`,
+  `Administration`. Each is role-guarded via `<Protected allow={[...]}>`; unauthorized
+  users are redirected to their own landing.
 
 ### Testing
-- **Backend: 155/155 pytest passing** (iteration_11).
-- **Frontend: 100% of Playwright flows** (login, category switching, drill-down,
-  telemetry chart, AI streaming, dark-mode toggle) — zero JS/page errors.
+- **Backend: 198/198 pytest passing** (iteration 12; +43 RBAC tests on top of the 155
+  iteration-11 tests).
+- **Frontend: 100% of Playwright RBAC/nav flows** — every role login lands on the
+  correct page, role-scoped sidebars verified, cross-role blocking verified for all 5
+  roles.
 
 ## Prioritized Backlog
 
+### P1 — Next roles + workspace switcher
+- Add remaining 6 roles: Performance Engineer, Sustainability Manager, Financial
+  User, Compliance Manager, AI Analyst, Client Viewer.
+- Multi-role workspaces + workspace switcher UI.
+- Per-field data masking (e.g. Technician can't see revenue).
+
 ### P2 (nice-to-have)
-- Make the telemetry sliding window visibly rotate at `hours=24` (aggregated series has
-  exactly 24 rows so `%1==0`). Rotate the deque by wall-clock instead of slicing.
-- Clamp/annotate PR% > 100% in SitesTable/SiteDetail (data artifact when actual > expected).
-- Move alarm severity + asset-status badge colors to theme tokens so dark mode adopts
-  darker pastels.
-- Scalability: replace multiple `find().to_list(2000) → $in` patterns in `fleet.py`
-  with `$lookup`/`$facet` for scenarios past 2000 sites.
+- Replace native `<select>` role picker on `/admin` with shadcn Select for design
+  consistency.
+- Make the telemetry sliding window visibly rotate at `hours=24`.
+- Clamp/annotate PR% > 100% in SitesTable/SiteDetail.
+- Move alarm severity + asset-status badge colors to theme tokens.
+- Scalability: replace `find().to_list(2000) → $in` patterns with `$lookup`/`$facet`.
 
 ### P3 (future)
 - IP-Aware Lockout (extend auth brute-force lockout to key on IP + email).

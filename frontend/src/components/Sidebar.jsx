@@ -1,26 +1,11 @@
 import { NavLink, Link } from "react-router-dom";
-import {
-  Home, Layers, Cpu, Workflow, Users, MessageSquare,
-  LayoutDashboard, ArrowUpRight, UserPlus, Mail, Bell, MapPin,
-} from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-
-const NAV = [
-  { to: "/", label: "Overview", icon: Home, section: "PLATFORM" },
-  { to: "/platform", label: "Platform", icon: Layers, section: "PLATFORM" },
-  { to: "/solutions", label: "Solutions", icon: Cpu, section: "PLATFORM" },
-  { to: "/how-it-works", label: "How It Works", icon: Workflow, section: "PLATFORM" },
-  { to: "/dashboard", label: "Live Dashboard", icon: LayoutDashboard, section: "OPERATIONS", protected: true },
-  { to: "/alerts", label: "Alert Center", icon: Bell, section: "OPERATIONS", protected: true },
-  { to: "/reports", label: "Report Scheduler", icon: Mail, section: "OPERATIONS", protected: true },
-  { to: "/team", label: "Team", icon: UserPlus, section: "OPERATIONS", adminOnly: true },
-  { to: "/about", label: "About", icon: Users, section: "COMPANY" },
-  { to: "/contact", label: "Contact", icon: MessageSquare, section: "COMPANY" },
-];
+import { NAV, visibleItems, ROLES } from "@/lib/roles";
 
 export default function Sidebar() {
   const { user } = useAuth();
-  const sections = ["PLATFORM", "OPERATIONS", "COMPANY"];
+  const roleMeta = user ? ROLES[user.role] : null;
 
   return (
     <aside
@@ -43,36 +28,45 @@ export default function Sidebar() {
         </div>
       </Link>
 
-      <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-6">
-        {sections.map((sec) => (
-          <div key={sec}>
-            <div className="px-3 mb-2 font-mono text-[10px] tracking-[0.2em] text-[color:var(--ink-3)]">
-              {sec}
+      {/* Role badge */}
+      {roleMeta && (
+        <div className="px-4 pt-4" data-testid="sidebar-role-badge">
+          <div className="rounded-xl border border-[color:var(--line-2)] bg-white/60 px-3 py-2 flex items-center gap-2">
+            <roleMeta.icon size={14} className="text-[color:var(--brand-3)]" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-mono text-[color:var(--ink-3)]">SIGNED IN AS</div>
+              <div className="text-xs font-medium text-[color:var(--ink)] truncate">{roleMeta.label}</div>
             </div>
-            <div className="space-y-1">
-              {NAV.filter((n) => n.section === sec)
-                .filter((n) => !n.adminOnly || user?.role === "admin")
-                .map((item) => (
+          </div>
+        </div>
+      )}
+
+      <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-6">
+        {NAV.map((section) => {
+          const items = visibleItems(section, user);
+          if (items.length === 0) return null;
+          return (
+            <div key={section.section}>
+              <div className="px-3 mb-2 font-mono text-[10px] tracking-[0.2em] text-[color:var(--ink-3)]">
+                {section.section}
+              </div>
+              <div className="space-y-1">
+                {items.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     end={item.to === "/"}
-                    data-testid={`sidebar-link-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                    data-testid={`sidebar-link-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                     className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
                   >
                     <item.icon size={16} strokeWidth={1.8} />
                     <span>{item.label}</span>
-                    {item.protected && !user && (
-                      <span className="ml-auto text-[9px] font-mono text-[color:var(--ink-3)]">AUTH</span>
-                    )}
-                    {item.adminOnly && (
-                      <span className="ml-auto text-[9px] font-mono text-[color:var(--brand-3)]">ADMIN</span>
-                    )}
                   </NavLink>
                 ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="p-4 border-t border-[color:var(--line)]">

@@ -47,6 +47,13 @@ async def healthz():
     return {"ok": True, "fleet_sites": fleet_sites, "time": datetime.now(timezone.utc).isoformat()}
 
 
+@api_router.get("/rbac/landing")
+async def rbac_landing():
+    """Public map of role -> default landing route (frontend uses this after login)."""
+    from rbac import ROLE_LANDING, MVP_ROLES
+    return {"landing": ROLE_LANDING, "mvp_roles": list(MVP_ROLES)}
+
+
 # Mount domain routers
 api_router.include_router(auth_router)
 api_router.include_router(ai_router)
@@ -107,6 +114,39 @@ async def startup():
         logging.info("[STARTUP] Dataset seed status: %s", result)
     except Exception as e:  # noqa: BLE001
         logging.exception("[STARTUP] Dataset seed failed: %s", e)
+
+    # Migrate legacy `user` role → `executive` (safest read-only viewer)
+    migrated = await db.users.update_many({"role": "user"}, {"$set": {"role": "executive"}})
+    if migrated.modified_count:
+        logging.info("[STARTUP] Migrated %d legacy 'user' role -> 'executive'", migrated.modified_count)
+
+    # Seed demo accounts, one per MVP role — idempotent
+    demo_accounts = [
+        {"email": "executive@greensolutions.ai",    "name": "Ellie Executive",   "role": "executive",     "password": "Executive@123"},
+        {"email": "assetmgr@greensolutions.ai",     "name": "Alex Asset Mgr",    "role": "asset_manager", "password": "Asset@123"},
+        {"email": "ops@greensolutions.ai",          "name": "Omar O&M Mgr",      "role": "om_manager",    "password": "Ops@123"},
+        {"email": "tech@greensolutions.ai",         "name": "Tara Technician",   "role": "technician",    "password": "Tech@123"},
+    ]
+    for acc in demo_accounts:
+        exists = await db.users.find_one({"email": acc["email"]})
+        if not exists:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "email": acc["email"],
+                "password_hash": hash_password(acc["password"]),
+                "name": acc["name"],
+                "role": acc["role"],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logging.info("[STARTUP] Seeded demo account: %s (%s)", acc["email"], acc["role"])
+
+    # Purge earlier test junk accounts so the Administration table stays clean.
+    # Keep: the 5 demo accounts + the seeded admin + anything with a real domain.
+    junk_domains = ["@test.com", "@example.com", "@t.com"]
+    junk_query = {"$or": [{"email": {"$regex": f".*{d}$", "$options": "i"}} for d in junk_domains]}
+    purged = await db.users.delete_many(junk_query)
+    if purged.deleted_count:
+        logging.info("[STARTUP] Purged %d legacy test accounts", purged.deleted_count)
 
 
 @app.on_event("shutdown")

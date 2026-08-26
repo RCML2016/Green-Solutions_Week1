@@ -7,6 +7,10 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     name: str = Field(min_length=1, max_length=80)
+    role: Optional[str] = Field(
+        default="executive",
+        pattern="^(executive|asset_manager|om_manager|technician)$",
+    )
 
 
 class LoginRequest(BaseModel):
@@ -48,7 +52,11 @@ class SessionCreateRequest(BaseModel):
 class InviteRequest(BaseModel):
     email: EmailStr
     name: str = Field(min_length=1, max_length=80)
-    role: str = Field(pattern="^(owner|technician|compliance|admin)$")
+    role: str = Field(pattern="^(executive|asset_manager|om_manager|technician|admin|owner|compliance)$")
+
+
+class RoleUpdateRequest(BaseModel):
+    role: str = Field(pattern="^(executive|asset_manager|om_manager|technician|admin)$")
 
 
 class ScheduleRequest(BaseModel):

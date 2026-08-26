@@ -26,11 +26,16 @@ def admin_creds():
     if not p.exists():
         pytest.skip("missing test_credentials.md")
     c = p.read_text(encoding="utf-8")
+    # key: value style
     e = re.search(r'(?im)^\s*(?:[-*]\s*)?(?:\*\*)?email(?:\*\*)?\s*:\s*`?([^`\s]+)', c)
     pw = re.search(r'(?im)^\s*(?:[-*]\s*)?(?:\*\*)?password(?:\*\*)?\s*:\s*`?([^`\s]+)', c)
-    if not e or not pw:
-        pytest.skip("no creds in test_credentials.md")
-    return {"email": e.group(1), "password": pw.group(1)}
+    if e and pw:
+        return {"email": e.group(1), "password": pw.group(1)}
+    # markdown table style: | `email` | `password` | admin | ... |
+    row = re.search(r'\|\s*`([^`]+@[^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*admin\s*\|', c)
+    if row:
+        return {"email": row.group(1), "password": row.group(2)}
+    pytest.skip("no creds in test_credentials.md")
 
 
 @pytest.fixture(scope="session")
@@ -51,6 +56,23 @@ def normal_user():
     pwd = "UserPass@123"
     r = requests.post(f"{API}/auth/register",
                       json={"email": email, "password": pwd, "name": "TEST_QA User"}, timeout=30)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    _created_emails.append(email.lower())
+    return {"email": email, "password": pwd, "id": d["user"]["id"],
+            "headers": {"Authorization": f"Bearer {d['access_token']}"}}
+
+
+@pytest.fixture(scope="session")
+def writer_user():
+    """Registers a user with a write-capable role (post-iteration-12 RBAC:
+    default registration role `executive` is read-only and cannot POST
+    /actions, /alerts or acknowledge)."""
+    email = f"test_qa_writer_{uuid.uuid4().hex[:8]}@example.com"
+    pwd = "UserPass@123"
+    r = requests.post(f"{API}/auth/register",
+                      json={"email": email, "password": pwd, "name": "TEST_QA Writer",
+                            "role": "asset_manager"}, timeout=30)
     assert r.status_code == 200, r.text
     d = r.json()
     _created_emails.append(email.lower())

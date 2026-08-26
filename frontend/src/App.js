@@ -21,8 +21,13 @@ import Team from "@/pages/Team";
 import Reports from "@/pages/Reports";
 import Alerts from "@/pages/Alerts";
 import Snapshot from "@/pages/Snapshot";
+import ExecutiveOverview from "@/pages/ExecutiveOverview";
+import OperationsCenter from "@/pages/OperationsCenter";
+import MyWork from "@/pages/MyWork";
+import Administration from "@/pages/Administration";
+import { landingFor } from "@/lib/roles";
 
-function Protected({ children }) {
+function Protected({ children, allow }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
@@ -32,6 +37,10 @@ function Protected({ children }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  // Admin is a super-role — always allowed
+  if (allow && user.role !== "admin" && !allow.includes(user.role)) {
+    return <Navigate to={landingFor(user.role)} replace />;
+  }
   return children;
 }
 
@@ -49,46 +58,36 @@ function App() {
             <Route path="/how-it-works" element={<HowItWorks />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
-            <Route
-              path="/dashboard"
-              element={
-                <Protected>
-                  <Dashboard />
-                </Protected>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <Protected>
-                  <Reports />
-                </Protected>
-              }
-            />
-            <Route
-              path="/team"
-              element={
-                <Protected>
-                  <Team />
-                </Protected>
-              }
-            />
-            <Route
-              path="/alerts"
-              element={
-                <Protected>
-                  <Alerts />
-                </Protected>
-              }
-            />
-            <Route
-              path="/site/:site_id"
-              element={
-                <Protected>
-                  <SiteDetail />
-                </Protected>
-              }
-            />
+
+            {/* Role-specific landings */}
+            <Route path="/overview" element={
+              <Protected allow={["executive", "asset_manager", "om_manager"]}><ExecutiveOverview /></Protected>
+            } />
+            <Route path="/dashboard" element={
+              <Protected allow={["executive", "asset_manager", "om_manager"]}><Dashboard /></Protected>
+            } />
+            <Route path="/operations" element={
+              <Protected allow={["om_manager", "asset_manager"]}><OperationsCenter /></Protected>
+            } />
+            <Route path="/my-work" element={
+              <Protected allow={["technician", "om_manager"]}><MyWork /></Protected>
+            } />
+            <Route path="/admin" element={
+              <Protected allow={["admin"]}><Administration /></Protected>
+            } />
+
+            <Route path="/reports" element={
+              <Protected allow={["executive", "asset_manager", "om_manager"]}><Reports /></Protected>
+            } />
+            <Route path="/team" element={
+              <Protected allow={["admin"]}><Team /></Protected>
+            } />
+            <Route path="/alerts" element={
+              <Protected allow={["asset_manager", "om_manager", "technician"]}><Alerts /></Protected>
+            } />
+            <Route path="/site/:site_id" element={
+              <Protected><SiteDetail /></Protected>
+            } />
           </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

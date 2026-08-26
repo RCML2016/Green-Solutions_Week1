@@ -3,20 +3,21 @@ import { api, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
-import { UserPlus, Trash2, Copy, ShieldCheck, Wrench, ClipboardCheck, Crown } from "lucide-react";
+import { UserPlus, Trash2, Copy, ShieldCheck, Wrench, Briefcase, Activity, ClipboardList } from "lucide-react";
 
 const ROLES = [
-  { value: "owner", label: "Owner", icon: Crown, desc: "Portfolio-level insight & reporting" },
-  { value: "technician", label: "Technician", icon: Wrench, desc: "Field ops & finding actions" },
-  { value: "compliance", label: "Compliance", icon: ClipboardCheck, desc: "Audit reports & explainability" },
-  { value: "admin", label: "Admin", icon: ShieldCheck, desc: "Full platform + team access" },
+  { value: "executive",     label: "Executive",     icon: Briefcase,     desc: "Portfolio KPIs, revenue, ESG" },
+  { value: "asset_manager", label: "Asset Manager", icon: Activity,      desc: "Full fleet operations" },
+  { value: "om_manager",    label: "O&M Manager",   icon: Wrench,        desc: "Alarms, work orders, teams" },
+  { value: "technician",    label: "Technician",    icon: ClipboardList, desc: "Assigned work & troubleshooting" },
+  { value: "admin",         label: "Admin",         icon: ShieldCheck,   desc: "Full platform + team access" },
 ];
 
 export default function Team() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", email: "", role: "technician" });
+    const [form, setForm] = useState({ name: "", email: "", role: "technician" });
   const [busy, setBusy] = useState(false);
   const [lastInvite, setLastInvite] = useState(null);
 
@@ -54,11 +55,14 @@ export default function Team() {
   };
 
   const roleColor = {
-    admin: { color: "#065f46", background: "var(--brand-tint)", border: "var(--brand)" },
-    owner: { color: "#92400e", background: "#fef3c7", border: "#fde68a" },
-    technician: { color: "#1e40af", background: "#dbeafe", border: "#bfdbfe" },
-    compliance: { color: "#6b21a8", background: "#f3e8ff", border: "#e9d5ff" },
-    user: { color: "#374151", background: "#f3f4f6", border: "#e5e7eb" },
+    admin:         { color: "#065f46", background: "var(--brand-tint)", border: "var(--brand)" },
+    executive:     { color: "#92400e", background: "#fef3c7", border: "#fde68a" },
+    asset_manager: { color: "#1e40af", background: "#dbeafe", border: "#bfdbfe" },
+    om_manager:    { color: "#6b21a8", background: "#f3e8ff", border: "#e9d5ff" },
+    technician:    { color: "#0369a1", background: "#e0f2fe", border: "#bae6fd" },
+    owner:         { color: "#92400e", background: "#fef3c7", border: "#fde68a" },
+    compliance:    { color: "#6b21a8", background: "#f3e8ff", border: "#e9d5ff" },
+    user:          { color: "#374151", background: "#f3f4f6", border: "#e5e7eb" },
   };
 
   return (
@@ -93,7 +97,7 @@ export default function Team() {
             </div>
             <div>
               <label className="text-[10px] font-mono text-[color:var(--ink-3)]">ROLE</label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="grid grid-cols-1 gap-2 mt-2">
                 {ROLES.map((r) => (
                   <button key={r.value} type="button"
                     onClick={() => setForm({ ...form, role: r.value })}

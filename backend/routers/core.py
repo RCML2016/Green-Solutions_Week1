@@ -21,7 +21,9 @@ from models import (
     BrandingRequest,
     SnapshotCreate,
     ActionCreate,
+    RoleUpdateRequest,
 )
+from rbac import role_required
 
 router = APIRouter(tags=["core"])
 
@@ -171,6 +173,18 @@ async def remove_teammate(user_id: str, admin: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+@router.patch("/team/users/{user_id}/role")
+async def change_teammate_role(user_id: str, payload: RoleUpdateRequest, admin: dict = Depends(require_admin)):
+    """Admin-only: change a teammate's role. Cannot demote self."""
+    if user_id == admin["id"] and payload.role != "admin":
+        raise HTTPException(status_code=400, detail="You cannot demote yourself")
+    result = await db.users.update_one({"id": user_id}, {"$set": {"role": payload.role}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    logging.info(f"[TEAM ROLE] {admin['email']} → user {user_id} = {payload.role}")
+    return {"ok": True, "role": payload.role}
+
+
 # ---------------- Report Scheduling & Branding ----------------
 @router.get("/reports/schedule")
 async def get_report_schedule(user: dict = Depends(get_current_user)):
@@ -252,7 +266,7 @@ async def list_alerts(
 
 
 @router.post("/alerts")
-async def push_alert(payload: AlertCreate, user: dict = Depends(get_current_user)):
+async def push_alert(payload: AlertCreate, user: dict = Depends(role_required("asset_manager", "om_manager", "technician"))):
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -270,7 +284,7 @@ async def push_alert(payload: AlertCreate, user: dict = Depends(get_current_user
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
-async def ack_alert(alert_id: str, user: dict = Depends(get_current_user)):
+async def ack_alert(alert_id: str, user: dict = Depends(role_required("asset_manager", "om_manager", "technician"))):
     res = await db.alerts.update_one({"id": alert_id, "user_id": user["id"]}, {"$set": {"acknowledged": True}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -342,7 +356,7 @@ async def list_actions(user: dict = Depends(get_current_user)):
 
 
 @router.post("/actions")
-async def create_action(payload: ActionCreate, user: dict = Depends(get_current_user)):
+async def create_action(payload: ActionCreate, user: dict = Depends(role_required("asset_manager", "om_manager", "technician"))):
     doc = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],

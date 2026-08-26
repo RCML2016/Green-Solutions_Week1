@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { ArrowLeft, Sparkles } from "lucide-react";
+import { landingFor } from "@/lib/roles";
 
 export default function Login() {
   const { login } = useAuth();
@@ -17,7 +18,11 @@ export default function Login() {
     setBusy(true); setErr("");
     const res = await login(form.email, form.password);
     setBusy(false);
-    if (res.ok) { toast.success("Welcome back"); navigate(location.state?.from || "/dashboard"); }
+    if (res.ok) {
+      toast.success("Welcome back");
+      const dest = location.state?.from || landingFor(res.user?.role);
+      navigate(dest);
+    }
     else setErr(res.error);
   };
 
@@ -92,9 +97,13 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="mt-8 rounded-xl border border-[color:var(--line)] bg-[color:var(--bg-3)] p-4 text-xs text-[color:var(--ink-2)] font-mono">
-            <div className="text-[color:var(--ink-3)] mb-1">DEMO ACCOUNT</div>
-            admin@greensolutions.ai · Admin@123
+          <div className="mt-8 rounded-xl border border-[color:var(--line)] bg-[color:var(--bg-3)] p-4 text-xs text-[color:var(--ink-2)] font-mono space-y-1">
+            <div className="text-[color:var(--ink-3)] mb-1">DEMO ACCOUNTS · TRY ANY ROLE</div>
+            <div>admin@greensolutions.ai · Admin@123</div>
+            <div>executive@greensolutions.ai · Executive@123</div>
+            <div>assetmgr@greensolutions.ai · Asset@123</div>
+            <div>ops@greensolutions.ai · Ops@123</div>
+            <div>tech@greensolutions.ai · Tech@123</div>
           </div>
 
           <div className="mt-6 text-sm text-[color:var(--ink-2)] flex justify-between">

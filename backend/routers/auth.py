@@ -34,12 +34,13 @@ async def register(payload: RegisterRequest):
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     user_id = str(uuid.uuid4())
+    role = payload.role or "executive"
     doc = {
         "id": user_id,
         "email": email,
         "password_hash": hash_password(payload.password),
         "name": payload.name,
-        "role": "user",
+        "role": role,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
@@ -47,7 +48,7 @@ async def register(payload: RegisterRequest):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": user_id, "email": email, "name": payload.name, "role": "user"},
+        "user": {"id": user_id, "email": email, "name": payload.name, "role": role},
     }
 
 

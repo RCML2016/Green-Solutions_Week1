@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 12 (RBAC + role-based navigation) fully tested. Backend: created /app/backend/tests/test_iteration12.py (43 tests) covering /api/rbac/landing, register-with-role, 5 demo account logins + JWT role payload, endpoint guards on POST /alerts, POST /actions, POST /alerts/{id}/acknowledge, admin-only /team/users + PATCH role (self-demote 400, non-admin 403, invalid role 422, unknown user 404), legacy 'user'->'executive' migration verified in Mongo, bcrypt $2b$ hash format, brute-force lockout (429). Full regression suite run: 198/198 passed (0 failures, 0 skips) including iterations 1-11. Frontend: verified all 5 role logins land on the correct route with correct page testid and role badge, role-scoped sidebars for all 5 roles, cross-role blocking (technician blocked from /admin /overview /dashboard /operations /reports /team -> /my-work; executive blocked from /admin /operations /my-work /team /alerts -> /overview), ExecutiveOverview KPIs/portfolio mix (8 bars)/top risks (5 critical alarms)/3 CTAs with real data, OperationsCenter 4 KPIs + alarm stream + work orders card, MyWork 7-8 high-sev alarm cards + 8 dispatched WO cards with Open Site + START (START fires 'Marked in progress' toast), Administration 4 KPIs + user table + inline role select (change persists across reload, toast shown, own row disabled), Register role picker for all 4 roles routes to the correct landing, login page shows all 5 demo accounts, mobile (390px) /my-work renders with 0 horizontal overflow.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Operations Center (/operations)", "issues": ["Third quick-jump CTA (ops-cta-team) is rendered only for role admin, so om_manager/asset_manager see 2 cards in a md:grid-cols-3 grid leaving an empty column. Spec said 3 CTAs. Suggest a non-admin third CTA (e.g. My Work / Reports) or switch to a 2-col grid for non-admins."]},
+      {"screen": "Administration (/admin) user table", "issues": ["Role picker uses a native <select> instead of the shadcn Select component used elsewhere in the app — inconsistent styling with the rest of the design system.", "Table lists 6 leftover junk accounts from earlier iterations (user8264@test.com, test_ui_6214c165@example.com, tech1@example.com, reguser25197@t.com, pwtest6283@t.com, newexec@test.com) which makes the demo look unpolished; consider a cleanup script."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iteration12.xml",
+    "/app/test_reports/pytest/iteration12_full.xml"
+  ],
+  "action_items": [
+    "Optional polish: add a non-admin third CTA on /operations so the 3-col grid isn't half empty.",
+    "Optional polish: replace native <select> in /admin role picker with shadcn Select for design consistency.",
+    "Optional: purge legacy junk test accounts from the users collection so the Administration table only shows demo roles."
+  ],
+  "critical_code_review_comments": [
+    "routers/auth.py login falls back to role 'user' (user.get('role','user')) — that legacy value is no longer in LANDING/NAV, so a role-less user document would produce landingFor() -> '/dashboard' but an empty non-public sidebar. Default to 'executive' to match the startup migration.",
+    "models.py RegisterRequest role pattern intentionally rejects 'admin' (verified 422) — good, prevents privilege escalation via self-registration.",
+    "rbac.role_required always adds 'admin' to the allowed set — consistent with the frontend Protected super-role bypass; both mirrors verified.",
+    "Backend has no route-level guard mirroring /overview, /operations, /my-work, /reports (they are frontend-only screens fed by non-gated /api/fleet/*). Per MVP scope this is accepted, but any field-masking pass must gate fleet reads."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration12.py",
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_iteration9.py",
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (198/198)", "frontend": "100% of tested RBAC/nav flows"},
+  "seed_data_creation": "Created and deleted transient users: test_qa_r12_* (backend pytest, auto-cleaned via teardown) and test_ui_r12_* (Playwright register flow, deleted manually after the run). Demo alerts/actions with TEST_QA_R12 prefix created by guard tests.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "/app/memory/test_credentials.md — admin@greensolutions.ai/Admin@123, executive@greensolutions.ai/Executive@123, assetmgr@greensolutions.ai/Asset@123, ops@greensolutions.ai/Ops@123, tech@greensolutions.ai/Tech@123. All 5 verified working.",
+  "context_for_next_testing_agent": "test_credentials.md is now a markdown TABLE (not key: value). The old admin_creds / test_credentials regex in conftest.py and backend_test.py silently pytest.skip()'d 96 tests because of this — I added a table-row fallback regex; keep it. Post-iteration-12 RBAC means the conftest `normal_user` fixture (default register role = executive) is READ-ONLY and gets 403 on POST /api/actions, /api/alerts and acknowledge; use the new `writer_user` fixture (role=asset_manager) for write tests. iteration_9 tests were migrated to writer_user for this reason. Full suite: `cd /app/backend && python -m pytest tests/ -q` => 198 passed.",
+  "rca_of_the_issue": "Two test-infrastructure regressions were found and fixed (in-scope): (1) test_credentials.md was reformatted into a markdown table in iteration 12, so the key:value regex in conftest.admin_creds and backend_test.test_credentials no longer matched and 96 tests skipped silently — added a table-row fallback. (2) iteration_9 action tests used the `normal_user` fixture whose registration role now defaults to `executive`, which the new rbac.role_required guard correctly rejects with 403 — added a `writer_user` (asset_manager) fixture and pointed the write tests at it. No application/business-logic changes were made."
+}
