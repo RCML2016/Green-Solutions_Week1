@@ -4,37 +4,37 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Manrope:wght@300..800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* ===== 2026+ light, shiny palette ===== */
+/* ===== 2026+ shiny mid-tone palette (warm sage, deeper than pure cream) ===== */
 :root {
-    /* Base surface */
-    --bg: #f4f7f0;                  /* soft cream-green canvas */
-    --bg-2: #ffffff;                /* elevated white surface */
-    --bg-3: #eaf0e3;                /* subtle sunken surface */
+    /* Base surface — richer and slightly darker so cards lift off the page */
+    --bg: #dbe3d1;                  /* muted warm sage canvas */
+    --bg-2: #f0f3e8;                /* elevated cream card */
+    --bg-3: #cdd6c1;                /* deeper sunken accents */
 
     /* Brand */
     --ink: #082b1c;                 /* deep forest — headings */
-    --ink-2: #3d4d43;               /* body text */
-    --ink-3: #6f7d72;               /* meta / captions */
+    --ink-2: #354339;               /* body text */
+    --ink-3: #616f65;               /* meta / captions */
 
-    --line: #dfe5d8;                /* hairline borders */
-    --line-2: #eaefe4;              /* subtle divider */
+    --line: #c6d0ba;                /* stronger hairline for depth */
+    --line-2: #d6dfca;              /* subtle divider */
 
-    --brand: #10b981;               /* fresh emerald */
-    --brand-2: #34d399;             /* mint hover */
-    --brand-3: #059669;             /* deep press */
-    --brand-tint: #d7f7e6;          /* soft brand background */
+    --brand: #10b981;
+    --brand-2: #34d399;
+    --brand-3: #059669;
+    --brand-tint: #cef3e0;
 
-    --amber: #f59e0b;
-    --amber-tint: #fff2d6;
-    --coral: #f87171;
-    --coral-tint: #ffe4e4;
+    --amber: #d97706;
+    --amber-tint: #fde9c8;
+    --coral: #ef4444;
+    --coral-tint: #fddede;
 
     --forest: #0a2e1e;
     --forest-2: #06301e;
 
-    --shine-mint: linear-gradient(140deg, #ecfef4 0%, #f6f8f2 55%, #fff9ea 100%);
+    --shine-mint: linear-gradient(140deg, #e2f5e6 0%, #eef2e5 55%, #f7f2df 100%);
     --shine-emerald: linear-gradient(140deg, #10b981 0%, #34d399 55%, #7dffb8 100%);
-    --shine-glass: linear-gradient(140deg, rgba(255,255,255,0.9), rgba(255,255,255,0.55));
+    --shine-glass: linear-gradient(140deg, rgba(255,255,255,0.78), rgba(255,255,255,0.5));
 }
 
 /* ===== Soft dark mode — preserves the same shine ===== */
@@ -176,13 +176,13 @@ body {
     background: var(--bg-2);
     border: 1px solid var(--line);
     border-radius: 22px;
-    box-shadow: 0 12px 30px -22px rgba(8,43,28,0.18);
+    box-shadow: 0 18px 40px -26px rgba(8,43,28,0.28), 0 2px 6px -4px rgba(8,43,28,0.08);
     transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
 }
 .gs-card:hover {
     transform: translateY(-3px);
-    border-color: #cddac1;
-    box-shadow: 0 24px 60px -30px rgba(8,43,28,0.3);
+    border-color: #b5c3a5;
+    box-shadow: 0 28px 70px -30px rgba(8,43,28,0.4);
 }
 
 .gs-card-accent {

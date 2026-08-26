@@ -61,6 +61,14 @@
 - **Custom PDF branding**: `/api/reports/branding` upsert; Reports page adds company name, cover note, logo upload (base64, ≤140KB) + live cover-page preview. Dashboard export automatically prepends a branded cover page if any field is set.
 - **Public snapshot links**: `POST /api/snapshots` captures a metrics blob + returns a shareable `/s/:token` URL (14-day TTL via Mongo `expireAfterSeconds`). Public `GET /api/public/snapshots/{token}` (no auth). New `Snapshot.jsx` route renders a stripped read-only dashboard with a "Get live intelligence" CTA.
 
+## Iteration 9 — Warmer theme + 4 features (2026-02)
+- **Palette shifted warmer/deeper**: `--bg #dbe3d1` (sage), card `#f0f3e8`, stronger `--line`, deeper shadow — cards lift off the page.
+- **Recommended Actions**: `POST /api/actions` + `GET /api/actions`. Dashboard row-level `AcceptActionButton` streams Claude for a one-line action, strips `Action:` prefix, POSTs to actions, swaps to `✓ LOGGED`.
+- **Snapshot Manager**: `GET /api/snapshots` (no metrics blob) + `DELETE /api/snapshots/{token}`. Reports page lists all shares with OPEN + REVOKE.
+- **Login rate-limit**: 5 wrong passwords → 15-min lock via `db.login_attempts`; 429 with human message. Success clears counter.
+- **AI Weekly Digest**: `POST /api/reports/weekly-digest` — Claude Sonnet 5 summarises last 7 days of alerts + accepted actions. Reports page button + card + copy; client renders `**bold**` markdown correctly.
+- **Verified**: Backend 82/82 pytest + Frontend 100% Playwright flows. Zero console errors.
+
 ## Prioritized Backlog
 - P1: Real-time metrics WebSocket refresh
 - P1: Password reset flow (forgot / reset)

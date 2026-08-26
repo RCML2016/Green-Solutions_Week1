@@ -436,7 +436,7 @@ export default function Dashboard() {
                     return <div className="text-sm text-[color:var(--ink-3)] py-6 text-center" data-testid="findings-empty">No findings match your filters.</div>;
                   }
                   return list.map((f) => (
-                    <div key={f.code} className="py-3 flex items-center gap-3" data-testid={`finding-${f.code}`}>
+                    <div key={f.code} className="py-3 flex items-center gap-3 flex-wrap" data-testid={`finding-${f.code}`}>
                       <span className="font-mono text-[10px] text-[color:var(--brand-3)]">{f.code}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-[color:var(--ink)] truncate">{f.title}</div>
@@ -455,6 +455,7 @@ export default function Dashboard() {
                       >
                         ASK AI
                       </button>
+                      <AcceptActionButton finding={f} />
                     </div>
                   ));
                 })()}
@@ -471,6 +472,82 @@ export default function Dashboard() {
       {/* Onboarding tour: first-time users */}
       {data && <OnboardingTour />}
     </div>
+  );
+}
+
+/* --------------------- Accept AI Action button --------------------- */
+
+function AcceptActionButton({ finding }) {
+  const [busy, setBusy] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+
+  const accept = async () => {
+    setBusy(true);
+    try {
+      // Ask Claude for a single-line action, non-streaming (buffer the SSE)
+      const token = localStorage.getItem("gs_token");
+      const res = await fetch(`${API}/ai/insight`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          question: `In ONE short imperative sentence (max 20 words), what's the single best next action for ${finding.code} · ${finding.title}? Return just the sentence, no preamble.`,
+          finding_code: finding.code,
+        }),
+      });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "", action = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() || "";
+        for (const c of chunks) {
+          const line = c.trim();
+          if (!line.startsWith("data:")) continue;
+          try {
+            const payload = JSON.parse(line.slice(5).trim());
+            if (payload.delta) action += payload.delta;
+          } catch (e) {
+            console.warn("Malformed SSE chunk in accept-action:", e?.message);
+          }
+        }
+      }
+      // Strip common "Action:" prefix from the system prompt
+      const cleaned = action.replace(/^\s*Action:\s*/i, "").trim();
+      if (!cleaned) throw new Error("Empty action");
+
+      await api.post("/actions", {
+        finding_code: finding.code,
+        finding_title: finding.title,
+        action_text: cleaned,
+      });
+      setAccepted(true);
+      toast.success(`Action logged: ${cleaned.slice(0, 60)}${cleaned.length > 60 ? "…" : ""}`);
+    } catch (e) {
+      console.warn("Accept action failed:", e?.message);
+      toast.error("Could not generate action");
+    } finally { setBusy(false); }
+  };
+
+  if (accepted) {
+    return (
+      <span className="text-[10px] font-mono px-2 py-1 rounded-full text-[color:var(--brand-3)] bg-[color:var(--brand-tint)] border border-[color:var(--brand)]" data-testid={`action-accepted-${finding.code}`}>
+        ✓ LOGGED
+      </span>
+    );
+  }
+  return (
+    <button
+      onClick={accept}
+      disabled={busy}
+      data-testid={`accept-action-${finding.code}`}
+      className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--brand)] bg-[color:var(--brand-tint)] text-[color:var(--brand-3)] hover:bg-white transition disabled:opacity-50"
+    >
+      {busy ? "…" : "ACCEPT ACTION"}
+    </button>
   );
 }
 

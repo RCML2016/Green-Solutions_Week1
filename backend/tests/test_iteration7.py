@@ -29,9 +29,11 @@ class TestHealthAndAuth:
         assert "password_hash" not in me.json()
         assert "_id" not in me.json()
 
-    def test_login_bad_password(self, admin_creds):
+    def test_login_bad_password(self):
+        # Iteration 9: never use the admin email here — 5 bad logins now lock the account.
         r = requests.post(f"{API}/auth/login",
-                          json={"email": admin_creds["email"], "password": "wrong-pass-xyz"}, timeout=30)
+                          json={"email": f"test_qa_nobody_{uuid.uuid4().hex[:8]}@example.com",
+                                "password": "wrong-pass-xyz"}, timeout=30)
         assert r.status_code == 401
         assert "Invalid" in r.json()["detail"]
 
@@ -43,13 +45,28 @@ class TestHealthAndAuth:
         r = requests.get(f"{API}/auth/me", headers={"Authorization": "Bearer not.a.jwt"}, timeout=30)
         assert r.status_code == 401
 
-    def test_repeated_bad_logins_then_good_login(self, admin_creds):
-        """No lockout implemented — documents current behaviour (6 fails then success)."""
-        for _ in range(6):
-            requests.post(f"{API}/auth/login",
-                          json={"email": admin_creds["email"], "password": "bad"}, timeout=30)
-        r = requests.post(f"{API}/auth/login", json=admin_creds, timeout=30)
-        assert r.status_code == 200, "admin locked out or password broken after failed attempts"
+    def test_repeated_bad_logins_lock_out(self):
+        """Iteration 9: 5 consecutive failures lock the identifier for 15 min (429)."""
+        email = f"test_qa_i7lock_{uuid.uuid4().hex[:8]}@example.com"
+        pwd = "Lock7Pass@123"
+        assert requests.post(f"{API}/auth/register",
+                             json={"email": email, "password": pwd, "name": "TEST_i7lock"},
+                             timeout=30).status_code == 200
+        for _ in range(5):
+            assert requests.post(f"{API}/auth/login",
+                                 json={"email": email, "password": "bad"}, timeout=30).status_code == 401
+        r = requests.post(f"{API}/auth/login", json={"email": email, "password": pwd}, timeout=30)
+        assert r.status_code == 429, r.text
+        try:
+            from pymongo import MongoClient
+            from dotenv import dotenv_values
+            be = dotenv_values("/app/backend/.env")
+            cl = MongoClient(be["MONGO_URL"])
+            cl[be["DB_NAME"]].login_attempts.delete_many({"identifier": email.lower()})
+            cl[be["DB_NAME"]].users.delete_many({"email": email.lower()})
+            cl.close()
+        except Exception as e:
+            print(f"cleanup skipped: {e}")
 
 
 # --- Portfolios CRUD ---

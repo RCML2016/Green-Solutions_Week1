@@ -152,6 +152,17 @@ class SnapshotCreate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=120)
 
 
+class ActionCreate(BaseModel):
+    finding_code: str = Field(min_length=1, max_length=40)
+    finding_title: str = Field(min_length=1, max_length=200)
+    action_text: str = Field(min_length=1, max_length=500)
+
+
+# --- Login rate limiting (in-memory best-effort; Mongo-backed for durability) ---
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCK_MINUTES = 15
+
+
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -173,6 +184,8 @@ async def startup():
     await db.snapshots.create_index("token", unique=True)
     await db.snapshots.create_index("expires_at", expireAfterSeconds=0)
     await db.branding.create_index("user_id", unique=True)
+    await db.actions.create_index([("user_id", 1), ("created_at", -1)])
+    await db.login_attempts.create_index("identifier")
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@greensolutions.ai").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
@@ -223,11 +236,42 @@ async def register(payload: RegisterRequest):
 
 
 @api_router.post("/auth/login")
-async def login(payload: LoginRequest):
+async def login(payload: LoginRequest, request: Request):
     email = payload.email.lower()
+    identifier = email
+    now = datetime.now(timezone.utc)
+    # Check for existing lock
+    record = await db.login_attempts.find_one({"identifier": identifier})
+    if record and record.get("locked_until"):
+        locked_until = record["locked_until"]
+        if isinstance(locked_until, str):
+            locked_until = datetime.fromisoformat(locked_until)
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+        if now < locked_until:
+            wait_min = int((locked_until - now).total_seconds() / 60) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed attempts. Try again in ~{wait_min} min.",
+            )
+
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
+        # Record failure
+        attempts = (record.get("count", 0) if record else 0) + 1
+        update = {"count": attempts, "last_failed": now.isoformat()}
+        if attempts >= LOGIN_MAX_ATTEMPTS:
+            update["locked_until"] = (now + timedelta(minutes=LOGIN_LOCK_MINUTES)).isoformat()
+            update["count"] = 0  # reset counter once locked
+        await db.login_attempts.update_one(
+            {"identifier": identifier},
+            {"$set": update, "$setOnInsert": {"identifier": identifier}},
+            upsert=True,
+        )
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Success — clear attempts
+    await db.login_attempts.delete_one({"identifier": identifier})
     token = create_access_token(user["id"], email)
     return {
         "access_token": token,
@@ -718,11 +762,116 @@ async def get_snapshot(token: str):
     snap = await db.snapshots.find_one({"token": token}, {"_id": 0, "user_id": 0})
     if not snap:
         raise HTTPException(status_code=404, detail="Snapshot not found or expired")
-    # Convert datetime fields for JSON response
     for k in ("created_at", "expires_at"):
         if isinstance(snap.get(k), datetime):
             snap[k] = snap[k].isoformat()
     return snap
+
+
+@api_router.get("/snapshots")
+async def list_snapshots(user: dict = Depends(get_current_user)):
+    items = await db.snapshots.find(
+        {"user_id": user["id"]},
+        {"_id": 0, "metrics": 0},
+    ).sort("created_at", -1).limit(200).to_list(200)
+    for it in items:
+        for k in ("created_at", "expires_at"):
+            if isinstance(it.get(k), datetime):
+                it[k] = it[k].isoformat()
+    return items
+
+
+@api_router.delete("/snapshots/{token}")
+async def revoke_snapshot(token: str, user: dict = Depends(get_current_user)):
+    res = await db.snapshots.delete_one({"token": token, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return {"ok": True}
+
+
+# --- Recommended Actions ---
+@api_router.get("/actions")
+async def list_actions(user: dict = Depends(get_current_user)):
+    items = await db.actions.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    return items
+
+
+@api_router.post("/actions")
+async def create_action(payload: ActionCreate, user: dict = Depends(get_current_user)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "finding_code": payload.finding_code,
+        "finding_title": payload.finding_title,
+        "action_text": payload.action_text,
+        "status": "accepted",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.actions.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+# --- AI Weekly Digest ---
+@api_router.post("/reports/weekly-digest")
+async def weekly_digest(user: dict = Depends(get_current_user)):
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=168)
+    alerts = await db.alerts.find(
+        {"user_id": user["id"], "created_at": {"$gte": cutoff.isoformat()}},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(100).to_list(100)
+    actions = await db.actions.find(
+        {"user_id": user["id"], "created_at": {"$gte": cutoff.isoformat()}},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(100).to_list(100)
+
+    alerts_summary = "\n".join(
+        f"- {a['code']} · {a['severity'].upper()} · {a['title']} (conf {a['confidence']}%)"
+        for a in alerts[:20]
+    ) or "No alerts this week."
+    actions_summary = "\n".join(
+        f"- {a['finding_code']}: {a['action_text']}" for a in actions[:20]
+    ) or "No accepted actions this week."
+
+    system = (
+        "You are the Green Solutions AI Digest Writer. In 4-6 short sentences, "
+        "summarise the past week for a portfolio owner. Highlight top themes, "
+        "biggest risks, and what got resolved. End with one 'Next week focus:' line. "
+        "Use plain English, no jargon."
+    )
+    user_prompt = (
+        f"WEEKLY ALERTS ({len(alerts)}):\n{alerts_summary}\n\n"
+        f"ACCEPTED ACTIONS ({len(actions)}):\n{actions_summary}"
+    )
+    chat = LlmChat(
+        api_key=api_key,
+        session_id=f"digest-{user['id']}",
+        system_message=system,
+    ).with_model("anthropic", "claude-sonnet-5")
+
+    text = ""
+    try:
+        async for ev in chat.stream_message(UserMessage(text=user_prompt)):
+            if isinstance(ev, TextDelta):
+                text += ev.content
+            elif isinstance(ev, StreamDone):
+                break
+    except Exception as e:
+        logging.exception("Weekly digest failed")
+        raise HTTPException(status_code=502, detail=f"AI digest failed: {e}")
+
+    logging.info(f"[WEEKLY DIGEST] Generated for {user['email']} · {len(text)} chars")
+    return {
+        "ok": True,
+        "digest": text,
+        "alerts_count": len(alerts),
+        "actions_count": len(actions),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 app.include_router(api_router)

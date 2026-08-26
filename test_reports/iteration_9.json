@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 9 full-stack test. Backend: wrote /app/backend/tests/test_iteration9.py (16 tests) covering POST/GET /api/actions (auth, 422 validation, persistence, per-user scoping), GET /api/snapshots (no metrics blob, newest-first, no _id), DELETE /api/snapshots/{token} (owner 200, cross-user 404, unknown 404, public read becomes 404), login rate-limit (5 fails -> 401, 6th -> 429 'Too many failed attempts. Try again in ~N min.', success clears counter, lock clears via db.login_attempts), and POST /api/reports/weekly-digest (Claude Sonnet 5, non-empty digest, alerts_count/actions_count/generated_at). Full backend suite = 82/82 passing after I updated two STALE legacy tests that were hammering the admin email with wrong passwords and locking the admin account out (test-only fix). Frontend (Playwright, admin creds): login->dashboard, all 4 finding rows show ASK AI + ACCEPT ACTION, ACCEPT ACTION shows '...', 'Action logged:' toast and swaps to green '✓ LOGGED' pill; Reports weekly digest generates (1155 chars) + COPY shows 'Copied'; Snapshot Manager lists snapshots, revoke removes row (and public link 404s), snapshot-open opens /s/<token> in a new tab and public page renders; theme palette --bg #dbe3d1 / card #f0f3e8 consistent on /, /dashboard, /alerts, /reports, /team; dark toggle swaps both ways; login lockout 429 is surfaced verbatim in the login form error. Zero console/page errors in every run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/login", "issue": "Lockout is keyed ONLY on the submitted email (no IP component), so anyone can deliberately lock out any known account (e.g. admin@greensolutions.ai) with 5 bad guesses — account-lockout DoS. This actually happened during regression: legacy tests using the admin email locked the demo admin out. Suggest keying on email+client IP (or lock IP only) and/or exempting/short-locking the demo admin."},
+      {"endpoint": "db.login_attempts", "issue": "No TTL index and no unique index on 'identifier' (server.py:188 creates a plain index). Stale lock rows accumulate forever, and the non-atomic find_one -> upsert can insert duplicate identifier rows under concurrent attempts. Add unique index + TTL (expireAfterSeconds on locked_until/last_failed)."},
+      {"endpoint": "POST /api/reports/weekly-digest", "issue": "No rate limiting / no cache — each click triggers a paid Sonnet-5 call; a user can spam the button. Also returns 502 on LLM failure with the raw exception string in 'detail' (leaks provider internals)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Reports > digest-result", "issue": "Digest text is rendered raw, so markdown from the model shows literal asterisks (e.g. '**Weekly Digest – Green Solutions Portfolio**', '**Next week focus:**'). Either strip '*' or render markdown.", "selector": "[data-testid=digest-result]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Reports / Snapshot Manager", "issues": ["Snapshot list is unbounded (no pagination/scroll cap) — after several shares the section grows very long; consider capping to ~10 with 'show more'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9.py",
+    "/app/backend/tests/test_iteration7.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/iter9_results.xml"
+  ],
+  "action_items": [
+    "Add an IP component (or IP-only) to the login lockout key so a third party cannot lock a known account, and ensure the demo admin cannot be permanently locked.",
+    "Add unique + TTL index on db.login_attempts.identifier to avoid duplicate rows and stale locks.",
+    "Render/strip markdown in the weekly digest card so '**...**' does not show as literal asterisks.",
+    "Optionally throttle/cache POST /api/reports/weekly-digest and stop returning raw LLM exception text in the 502 detail.",
+    "Split /app/backend/server.py (894 lines) into routers (auth, portfolio, alerts, reports, snapshots, actions)."
+  ],
+  "critical_code_review_comments": [
+    "server.py login(): lockout identifier = email only -> targeted account lockout DoS; also `update['count']=0` on lock means a post-expiry failure restarts from 1 while the stale locked_until stays in the doc (harmless but confusing).",
+    "server.py:188 db.login_attempts index is non-unique with no TTL; the find_one-then-upsert sequence is not atomic (use a single $inc upsert).",
+    "server.py is 894 lines — exceeds the 700-line guideline; extract routers.",
+    "Auth is localStorage-JWT (pre-existing across iterations 1-8), so the playbook's httpOnly-cookie / CORS-allow-credentials checks do not apply; CORS is allow_origins=['*'] with allow_credentials=False which is consistent with that design. bcrypt hash verified to start with $2b$ (backend_test.py::test_bcrypt_hash_format passes)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration9.py (new)",
+    "/app/backend/tests/test_iteration7.py (bad-password + lockout tests now use throwaway emails instead of admin)",
+    "/app/backend/tests/backend_test.py (test_login_bad_password now uses a throwaway email)"
+  ],
+  "success_rate": {"backend": "100% (82/82)", "frontend": "100% of tested flows (1 cosmetic markdown issue)"},
+  "seed_data_creation": "Created and then deleted: TEST_ actions, TEST_ snapshots, TEST_ alerts, and throwaway test_qa_* users. db.login_attempts fully cleared at the end; admin@greensolutions.ai login re-verified = 200.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@greensolutions.ai / Admin@123 (from /app/memory/test_credentials.md) — works; not locked.",
+  "context_for_next_testing_agent": "IMPORTANT: never send wrong passwords for admin@greensolutions.ai — 5 failures lock it for 15 min. Legacy tests were fixed to use throwaway emails. If admin gets locked: python -> MongoClient(MONGO_URL)[DB_NAME].login_attempts.delete_many({}). Full backend suite: cd /app/backend && python -m pytest tests/ -q (82 tests, ~45s). New iteration-9 coverage lives in tests/test_iteration9.py. Frontend testids verified: accept-action-<code>, action-accepted-<code>, digest-generate, digest-result, digest-copy, snapshots-section, snapshots-list, snapshot-<token>, snapshot-open-<token>, snapshot-revoke-<token>, share-snapshot-btn (note: NOT 'share-snapshot'), theme-toggle.",
+  "rca_of_the_issue": "The only regression failures (3 failed + 6 errors on the first full run) were caused by pre-existing tests intentionally sending wrong passwords to the admin email; the new iteration-9 lockout then 429'd every subsequent admin login and cascaded into the admin_headers fixture. Root cause is the email-only lockout key combined with stale tests — fixed on the test side; the product-side hardening (IP in the key) is recommended above."
+}

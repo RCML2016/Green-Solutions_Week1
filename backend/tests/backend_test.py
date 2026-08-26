@@ -77,8 +77,11 @@ class TestAuthRegression:
         assert d["role"] == "admin"
         assert "_id" not in d and "password_hash" not in d
 
-    def test_login_bad_password(self, api_client, test_credentials):
-        r = api_client.post(f"{API}/auth/login", json={"email": test_credentials["email"], "password": "wrong-pass"})
+    def test_login_bad_password(self, api_client):
+        # Iteration 9: use a throwaway email — 5 failures now lock the identifier for 15 min.
+        import uuid as _uuid
+        r = api_client.post(f"{API}/auth/login", json={
+            "email": f"test_qa_bad_{_uuid.uuid4().hex[:8]}@example.com", "password": "wrong-pass"})
         assert r.status_code == 401
 
     def test_bcrypt_hash_format(self):

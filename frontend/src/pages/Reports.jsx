@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Mail, Plus, X, Calendar, Send, Power, Image as ImageIcon, Sparkles } from "lucide-react";
+import { Mail, Plus, X, Calendar, Send, Power, Image as ImageIcon, Sparkles, Share2, Trash2, ExternalLink, FileText, Loader2 } from "lucide-react";
 
 const FREQS = [
   { value: "daily", label: "Daily", desc: "Every business day at 08:00 local" },
@@ -20,6 +20,43 @@ export default function Reports() {
   const [branding, setBranding] = useState({ company_name: "", cover_note: "", logo_data_url: "" });
   const [savingBrand, setSavingBrand] = useState(false);
   const fileRef = useRef(null);
+
+  // Snapshots
+  const [snapshots, setSnapshots] = useState([]);
+  const [snapLoading, setSnapLoading] = useState(true);
+
+  // Weekly digest
+  const [digest, setDigest] = useState(null);
+  const [digestBusy, setDigestBusy] = useState(false);
+
+  const loadSnapshots = async () => {
+    setSnapLoading(true);
+    try {
+      const { data } = await api.get("/snapshots");
+      setSnapshots(data);
+    } catch (e) {
+      console.warn("Snapshots load failed:", e?.message);
+    } finally { setSnapLoading(false); }
+  };
+
+  const revokeSnapshot = async (token) => {
+    if (!window.confirm("Revoke this shared snapshot? Anyone with the link will see 'not found'.")) return;
+    try {
+      await api.delete(`/snapshots/${token}`);
+      setSnapshots((s) => s.filter((x) => x.token !== token));
+      toast.success("Snapshot revoked");
+    } catch (e) { toast.error(formatApiError(e)); }
+  };
+
+  const generateDigest = async () => {
+    setDigestBusy(true);
+    try {
+      const { data } = await api.post("/reports/weekly-digest");
+      setDigest(data);
+      toast.success("Weekly digest generated");
+    } catch (e) { toast.error(formatApiError(e)); }
+    finally { setDigestBusy(false); }
+  };
 
   useEffect(() => {
     (async () => {
@@ -43,6 +80,7 @@ export default function Reports() {
       }
       finally { setLoading(false); }
     })();
+    loadSnapshots();
   }, []);
 
   const onLogoPick = (e) => {
@@ -273,6 +311,111 @@ export default function Reports() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* --- AI Weekly Digest --- */}
+      <div className="mt-16" data-testid="digest-section">
+        <div className="eyebrow">AI WEEKLY DIGEST</div>
+        <h2 className="font-display text-2xl md:text-3xl mt-3 text-[color:var(--ink)]">
+          Claude drafts your <span className="text-[color:var(--brand-3)]">week in plain English.</span>
+        </h2>
+        <p className="text-[color:var(--ink-3)] text-sm mt-2 max-w-xl">
+          Summarises the past 7 days of alerts and accepted actions into a stakeholder-friendly
+          digest — ready to paste into email or attach with the PDF.
+        </p>
+        <div className="mt-6">
+          <button
+            onClick={generateDigest}
+            disabled={digestBusy}
+            data-testid="digest-generate"
+            className="gs-btn-primary disabled:opacity-60"
+          >
+            {digestBusy ? <Loader2 className="animate-spin" size={14} /> : <FileText size={14} />}
+            {digestBusy ? "Generating..." : "Generate this week's digest"}
+          </button>
+          {digest && (
+            <div className="gs-card p-6 mt-6" data-testid="digest-result">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] font-mono text-[color:var(--ink-3)]">
+                  DIGEST · {digest.alerts_count} ALERTS · {digest.actions_count} ACTIONS · {new Date(digest.generated_at).toLocaleString()}
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(digest.digest);
+                      toast.success("Copied");
+                    } catch (e) {
+                      console.warn("Copy failed:", e?.message);
+                      toast.error("Copy failed — select the text manually");
+                    }
+                  }}
+                  data-testid="digest-copy"
+                  className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--line)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)]"
+                >
+                  COPY
+                </button>
+              </div>
+              <div className="mt-4 text-sm text-[color:var(--ink)] leading-relaxed" data-testid="digest-text">
+                {digest.digest.split(/(\*\*.+?\*\*)/g).map((part, i) => {
+                  if (part.startsWith("**") && part.endsWith("**")) {
+                    return <strong key={i} className="text-[color:var(--ink)] font-semibold">{part.slice(2, -2)}</strong>;
+                  }
+                  return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* --- Snapshot Manager --- */}
+      <div className="mt-16" data-testid="snapshots-section">
+        <div className="eyebrow">SNAPSHOT MANAGER</div>
+        <h2 className="font-display text-2xl md:text-3xl mt-3 text-[color:var(--ink)]">
+          Manage every <span className="text-[color:var(--brand-3)]">public share link.</span>
+        </h2>
+        <p className="text-[color:var(--ink-3)] text-sm mt-2 max-w-xl">
+          Every "Share" snapshot lives here for 14 days. Revoke any link to make it immediately return "not found".
+        </p>
+        <div className="gs-card p-4 mt-6" data-testid="snapshots-list">
+          {snapLoading ? (
+            <div className="text-sm text-[color:var(--ink-3)] p-4">Loading snapshots...</div>
+          ) : snapshots.length === 0 ? (
+            <div className="text-sm text-[color:var(--ink-3)] p-4 text-center">
+              No shared snapshots yet. Use the Share button on the dashboard.
+            </div>
+          ) : (
+            <div className="divide-y divide-[color:var(--line-2)]">
+              {snapshots.map((s) => (
+                <div key={s.token} className="p-4 flex items-center gap-3 flex-wrap" data-testid={`snapshot-${s.token}`}>
+                  <Share2 size={14} className="text-[color:var(--brand-3)]" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-[color:var(--ink)] truncate">
+                      {s.title && !s.title.startsWith("20") ? s.title : `Snapshot · ${new Date(s.created_at).toLocaleString()}`}
+                    </div>
+                    <div className="text-[10px] font-mono text-[color:var(--ink-3)] mt-1">
+                      TOKEN {s.token.slice(0, 12)}… · EXPIRES {new Date(s.expires_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <a
+                    href={`/s/${s.token}`} target="_blank" rel="noreferrer"
+                    data-testid={`snapshot-open-${s.token}`}
+                    className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--line)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] flex items-center gap-1"
+                  >
+                    <ExternalLink size={11} /> OPEN
+                  </a>
+                  <button
+                    onClick={() => revokeSnapshot(s.token)}
+                    data-testid={`snapshot-revoke-${s.token}`}
+                    className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--line)] text-[color:var(--coral)] hover:border-[color:var(--coral)] hover:bg-[color:var(--coral-tint)] flex items-center gap-1"
+                  >
+                    <Trash2 size={11} /> REVOKE
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
