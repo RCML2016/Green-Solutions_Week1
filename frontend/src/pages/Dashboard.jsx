@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { api, API } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Activity, Sparkles, Zap, AlertTriangle, Download, Send, Bot, Loader2, History, MessageSquarePlus, Trash2, Bell } from "lucide-react";
+import { Activity, Sparkles, Zap, AlertTriangle, Download, Send, Bot, Loader2, History, MessageSquarePlus, Trash2, Bell, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import OnboardingTour from "@/components/OnboardingTour";
 
 const REFRESH_MS = 5000;
 
@@ -19,6 +20,20 @@ export default function Dashboard() {
   const aiPanelRef = useRef(null);
   const seenHighSevRef = useRef(new Set());
   const firstLoadRef = useRef(true);
+
+  // Findings filter state
+  const [filters, setFilters] = useState({
+    severities: new Set(["high", "medium", "low"]),
+    minConf: 0,
+    search: "",
+  });
+  const toggleSev = (s) =>
+    setFilters((f) => {
+      const next = new Set(f.severities);
+      next.has(s) ? next.delete(s) : next.add(s);
+      return { ...f, severities: next };
+    });
+  const resetFilters = () => setFilters({ severities: new Set(["high", "medium", "low"]), minConf: 0, search: "" });
 
   useEffect(() => {
     let mounted = true;
@@ -152,33 +167,88 @@ export default function Dashboard() {
             </div>
 
             <div className="gs-card p-6 mt-6">
-              <div className="flex items-center justify-between">
-                <div className="font-mono text-[10px] text-[color:var(--ink-3)]">AI PRIORITY FINDINGS</div>
-                <AlertTriangle size={14} className="text-[color:var(--amber)]" />
-              </div>
-              <div className="mt-3 divide-y divide-[color:var(--line-2)]">
-                {data.findings.map((f) => (
-                  <div key={f.code} className="py-3 flex items-center gap-3" data-testid={`finding-${f.code}`}>
-                    <span className="font-mono text-[10px] text-[color:var(--brand-3)]">{f.code}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-[color:var(--ink)] truncate">{f.title}</div>
-                      <span
-                        className="inline-block mt-1 text-[10px] font-mono border rounded-full px-2 py-0.5"
-                        style={{ color: sevStyle[f.severity].color, background: sevStyle[f.severity].background, borderColor: sevStyle[f.severity].border }}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Filter size={14} className="text-[color:var(--brand-3)]" />
+                  <div className="font-mono text-[10px] text-[color:var(--ink-3)]">AI PRIORITY FINDINGS · FILTER</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {["high", "medium", "low"].map((s) => {
+                    const on = filters.severities.has(s);
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleSev(s)}
+                        data-testid={`filter-sev-${s}`}
+                        className={`text-[10px] font-mono px-2 py-1 rounded-full border transition ${on ? "border-[color:var(--brand)] bg-[color:var(--brand-tint)] text-[color:var(--brand-3)]" : "border-[color:var(--line)] text-[color:var(--ink-3)]"}`}
                       >
-                        {f.severity.toUpperCase()}
-                      </span>
-                    </div>
-                    <span className="font-mono text-xs text-[color:var(--ink-2)]">{f.confidence}%</span>
-                    <button
-                      onClick={() => aiPanelRef.current?.askAbout(f.code, f.title)}
-                      data-testid={`ask-ai-${f.code}`}
-                      className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--line)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition"
-                    >
-                      ASK AI
-                    </button>
+                        {s.toUpperCase()}
+                      </button>
+                    );
+                  })}
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-[color:var(--ink-3)]">
+                    MIN {filters.minConf}%
+                    <input
+                      type="range" min="0" max="99" step="1"
+                      value={filters.minConf}
+                      onChange={(e) => setFilters((f) => ({ ...f, minConf: Number(e.target.value) }))}
+                      data-testid="filter-min-conf"
+                      className="accent-[color:var(--brand)]"
+                    />
                   </div>
-                ))}
+                  <input
+                    type="text" placeholder="Asset code / title..."
+                    value={filters.search}
+                    onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                    data-testid="filter-search"
+                    className="gs-input text-xs"
+                    style={{ padding: "6px 10px", width: 180 }}
+                  />
+                  <button
+                    onClick={resetFilters}
+                    data-testid="filter-reset"
+                    className="p-1.5 rounded-lg border border-[color:var(--line)] text-[color:var(--ink-3)] hover:text-[color:var(--ink)]"
+                    title="Reset"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 divide-y divide-[color:var(--line-2)]" data-testid="findings-list">
+                {(() => {
+                  const q = filters.search.trim().toLowerCase();
+                  const list = data.findings.filter(
+                    (f) =>
+                      filters.severities.has(f.severity) &&
+                      f.confidence >= filters.minConf &&
+                      (!q || f.code.toLowerCase().includes(q) || f.title.toLowerCase().includes(q))
+                  );
+                  if (list.length === 0) {
+                    return <div className="text-sm text-[color:var(--ink-3)] py-6 text-center" data-testid="findings-empty">No findings match your filters.</div>;
+                  }
+                  return list.map((f) => (
+                    <div key={f.code} className="py-3 flex items-center gap-3" data-testid={`finding-${f.code}`}>
+                      <span className="font-mono text-[10px] text-[color:var(--brand-3)]">{f.code}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-[color:var(--ink)] truncate">{f.title}</div>
+                        <span
+                          className="inline-block mt-1 text-[10px] font-mono border rounded-full px-2 py-0.5"
+                          style={{ color: sevStyle[f.severity].color, background: sevStyle[f.severity].background, borderColor: sevStyle[f.severity].border }}
+                        >
+                          {f.severity.toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="font-mono text-xs text-[color:var(--ink-2)]">{f.confidence}%</span>
+                      <button
+                        onClick={() => aiPanelRef.current?.askAbout(f.code, f.title)}
+                        data-testid={`ask-ai-${f.code}`}
+                        className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--line)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition"
+                      >
+                        ASK AI
+                      </button>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           </div>
@@ -188,6 +258,9 @@ export default function Dashboard() {
       ) : (
         <div className="text-[color:var(--ink-3)] text-sm">Unable to load metrics.</div>
       )}
+
+      {/* Onboarding tour: first-time users */}
+      {data && <OnboardingTour />}
     </div>
   );
 }

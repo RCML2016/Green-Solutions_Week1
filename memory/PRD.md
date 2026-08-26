@@ -49,6 +49,12 @@
 - Dashboard: light KPI cards, colored severity chips (red/amber/emerald), AI panel on white surface.
 - All auth screens (Login, Register, Forgot, Reset) redesigned with bright-shine accent pane.
 
+## Iteration 5 — Password change, onboarding tour, findings filter, theme toggle (2026-02)
+- **Password change**: `POST /api/auth/change-password` (auth-guarded, verifies current, rejects same-as-old); topbar profile menu → modal (`data-testid=profile-change-password`, `password-modal`, `password-submit`).
+- **Onboarding tour**: 4-step spotlight tour on first dashboard visit (KPIs → Findings → AI panel → Export). Skippable, stored in `localStorage["gs_tour_completed_v1"]`.
+- **Findings filter**: severity chips (high/medium/low), min-confidence slider, code/title search, reset. Renders `findings-empty` when nothing matches.
+- **Theme toggle**: `ThemeProvider` + `data-theme` attribute on `<html>`. Soft dark mode preserves the shine (deep forest bg, mint tints). Toggle in topbar; persists in `localStorage["gs_theme"]`.
+
 ## Prioritized Backlog
 - P1: Real-time metrics WebSocket refresh
 - P1: Password reset flow (forgot / reset)

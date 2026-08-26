@@ -24,20 +24,62 @@
     --brand-3: #059669;             /* deep press */
     --brand-tint: #d7f7e6;          /* soft brand background */
 
-    --amber: #f59e0b;               /* anomaly / warning */
+    --amber: #f59e0b;
     --amber-tint: #fff2d6;
-    --coral: #f87171;               /* destructive */
+    --coral: #f87171;
     --coral-tint: #ffe4e4;
 
-    /* Dark accent surface (for contrast blocks like hero, login pane) */
     --forest: #0a2e1e;
     --forest-2: #06301e;
 
-    /* Shine gradients */
     --shine-mint: linear-gradient(140deg, #ecfef4 0%, #f6f8f2 55%, #fff9ea 100%);
     --shine-emerald: linear-gradient(140deg, #10b981 0%, #34d399 55%, #7dffb8 100%);
     --shine-glass: linear-gradient(140deg, rgba(255,255,255,0.9), rgba(255,255,255,0.55));
 }
+
+/* ===== Soft dark mode — preserves the same shine ===== */
+[data-theme="dark"] {
+    --bg: #0c1a15;                  /* deep forest canvas (not pitch black) */
+    --bg-2: #10221a;                /* elevated surface */
+    --bg-3: #0a1611;                /* sunken */
+
+    --ink: #ecfef4;                 /* soft mint white */
+    --ink-2: #b8c8bd;
+    --ink-3: #7a8a80;
+
+    --line: #1e3629;
+    --line-2: #17281f;
+
+    --brand: #34d399;
+    --brand-2: #6ee7b7;
+    --brand-3: #a7f3d0;
+    --brand-tint: rgba(52,211,153,0.14);
+
+    --amber: #fbbf24;
+    --amber-tint: rgba(251,191,36,0.14);
+    --coral: #fca5a5;
+    --coral-tint: rgba(252,165,165,0.14);
+
+    --shine-mint: linear-gradient(140deg, #133226 0%, #10221a 55%, #1a2f16 100%);
+    --shine-emerald: linear-gradient(140deg, #10b981 0%, #34d399 55%, #a7f3d0 100%);
+    --shine-glass: linear-gradient(140deg, rgba(16,34,26,0.85), rgba(16,34,26,0.55));
+}
+
+[data-theme="dark"] .gs-canvas {
+    background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(52,211,153,0.14), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, rgba(251,191,36,0.06), transparent 60%),
+        var(--bg);
+}
+
+[data-theme="dark"] .gs-card { box-shadow: 0 12px 30px -22px rgba(0,0,0,0.6); }
+[data-theme="dark"] .gs-card-accent {
+    background: linear-gradient(140deg, #17321f 0%, #0e2118 60%, #14311e 100%);
+    border-color: #1e3629;
+}
+[data-theme="dark"] .gs-btn-ghost { background: rgba(255,255,255,0.04); }
+[data-theme="dark"] .gs-input { background: #0a1611; color: var(--ink); }
+[data-theme="dark"] body { background: var(--bg); color: var(--ink); }
 
 html, body, #root {
     height: 100%;

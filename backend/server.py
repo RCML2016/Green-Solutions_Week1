@@ -100,6 +100,11 @@ class ResetRequest(BaseModel):
     new_password: str = Field(min_length=6, max_length=128)
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=128)
+
+
 class InsightRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     finding_code: Optional[str] = None
@@ -315,6 +320,22 @@ async def reset_password(payload: ResetRequest):
         {"$set": {"used": True}},
     )
     return {"ok": True, "message": "Password updated. You can sign in now."}
+
+
+@api_router.post("/auth/change-password")
+async def change_password(payload: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    record = await db.users.find_one({"id": user["id"]})
+    if not record:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not verify_password(payload.current_password, record["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="New password must differ from current password")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(payload.new_password)}},
+    )
+    return {"ok": True, "message": "Password updated."}
 
 
 @api_router.post("/ai/insight")
