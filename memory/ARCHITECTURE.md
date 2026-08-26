@@ -1,589 +1,389 @@
-# Green Solutions — Architecture Reference
+# Green Solutions — Architecture (Feb 2026, iteration 14)
 
-> Complete architectural view: workflows, tech stacks, APIs, tests, and agentic AI orchestration.
-> Diagrams rendered with **Mermaid** — GitHub, VS Code, and most markdown viewers render them natively.
+Green Solutions is a full-stack renewable-energy intelligence platform:
+**React 19** frontend, **FastAPI + Motor (MongoDB)** backend, **Claude Sonnet 5** for
+AI, **Emergent Object Storage** for field-evidence photos, all deployed behind a
+Kubernetes ingress on `emergentagent.com`.
+
+- 7 role-based workspaces (Executive / Asset Manager / O&M / Technician /
+  Performance Engineer / Client Viewer / Admin)
+- Real dataset ingested from `data/green_solutions_sample_data.xlsx`:
+  380 sites, 5,473 assets, 60k telemetry rows, 800 alarms, 141 work orders
+- Live-refresh simulation via sliding-window over the telemetry snapshot
+- JWT auth, endpoint-level RBAC, workspace switching without re-login
+- Field evidence photo upload → Emergent Object Storage
 
 ---
 
-## 01 · High-Level End-to-End Workflow
+## 1. High-level system diagram
 
 ```mermaid
 flowchart LR
-  subgraph Client["🌐 Client Browser"]
-    UI["React 19 SPA<br/>Sidebar + TopBar + Pages"]
-    LS[("localStorage<br/>gs_token · gs_theme · gs_tour_completed")]
-  end
-
-  subgraph Edge["🛰 Kubernetes Ingress"]
-    Ingress["Path-based routing<br/>/api → :8001<br/>/* → :3000"]
-  end
-
-  subgraph Backend["⚙️ FastAPI Service (port 8001)"]
-    Router["/api Router"]
-    Auth["JWT + bcrypt<br/>get_current_user"]
-    Biz["Business logic<br/>portfolios · alerts · reports · snapshots"]
-    AI["AI Orchestrator<br/>emergentintegrations · Claude Sonnet 5"]
-  end
-
-  subgraph Data["💾 Data Layer"]
-    Mongo[("MongoDB<br/>13 collections<br/>indexes + TTLs")]
-  end
-
-  subgraph External["☁️ External Services"]
-    LLM["Anthropic Claude Sonnet 5<br/>via Emergent LLM key"]
-  end
-
-  UI -- "REST + SSE<br/>Bearer token" --> Ingress
-  Ingress --> Router
-  Router --> Auth
-  Auth --> Biz
-  Biz --> Mongo
-  Router --> AI
-  AI -- "stream_message()" --> LLM
-  AI --> Mongo
-  UI -- "polls /portfolio/metrics<br/>every 5s" --> Ingress
-  LS -.-> UI
-```
-
-### Request lifecycle (typical dashboard poll)
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant U as User
-  participant R as React (Dashboard.jsx)
-  participant A as axios interceptor
-  participant K as K8s Ingress
-  participant F as FastAPI
-  participant M as MongoDB
-  participant C as Claude Sonnet 5
-
-  U->>R: Login (admin@greensolutions.ai)
-  R->>A: POST /api/auth/login
-  A->>K: HTTPS + JSON
-  K->>F: /api/auth/login
-  F->>M: users.find_one({email})
-  M-->>F: user doc
-  F-->>R: { access_token, user }
-  R->>R: localStorage.setItem("gs_token", token)
-
-  loop every 5s
-    R->>A: GET /api/portfolio/metrics?portfolio_id=…
-    A->>K: Authorization: Bearer <jwt>
-    K->>F: verify JWT · jitter metrics
-    F-->>R: metrics + findings
-    R->>R: detect NEW high-severity finding
-    alt new anomaly
-      R->>A: POST /api/alerts
-      R->>C: POST /api/ai/insight (SSE, auto=true)
-      C-->>R: streamed tokens
-      R->>M: (assistant message persisted server-side)
+    subgraph Browser["User Browser (React 19 SPA)"]
+        UI[Pages · Sidebar · TopBar]
+        Ctx[AuthContext + ThemeContext]
+        Router[React Router v7]
     end
-  end
+
+    subgraph Ingress["Kubernetes Ingress"]
+        FE["/  → :3000 (frontend)"]
+        BE["/api → :8001 (backend)"]
+    end
+
+    subgraph Backend["FastAPI (backend/)"]
+        Auth[routers/auth.py]
+        AI[routers/ai.py]
+        Core[routers/core.py]
+        Fleet[routers/fleet.py]
+        RBAC[routers/rbac_ext.py]
+        Deps[deps.py · rbac.py]
+        Seed[seed_dataset.py]
+        Storage[storage.py]
+    end
+
+    subgraph External["3rd-party (Emergent)"]
+        LLM["Claude Sonnet 5<br/>via emergentintegrations"]
+        OBJ["Emergent Object Storage<br/>(evidence photos)"]
+    end
+
+    Mongo[(MongoDB<br/>17 collections)]
+
+    UI -- axios+JWT --> BE
+    Router --> UI
+    Ctx --> UI
+
+    BE --> Auth & AI & Core & Fleet & RBAC
+    Auth & AI & Core & Fleet & RBAC --> Deps
+    Deps --> Mongo
+    Seed -- xlsx@startup --> Mongo
+    AI --> LLM
+    RBAC --> Storage
+    Storage --> OBJ
 ```
 
 ---
 
-## 02 · Detailed Frontend Architecture
-
-### Tech Stack (frontend)
-
-| Layer | Choice | Rationale |
-| --- | --- | --- |
-| Framework | **React 19** (CRA + CRACO) | Modern hooks, strict mode |
-| Routing | **react-router-dom 7** | Nested routes + protected wrapper |
-| State | **React Context** (Auth, Theme) | No global store needed at this scale |
-| HTTP | **axios 1.18** + interceptor | Bearer token auto-injection |
-| Streaming | **fetch + ReadableStream** | Server-Sent Events for AI |
-| Styling | **Tailwind 3.4** + shadcn/ui + CSS vars | Consistent tokens for light/dark |
-| Icons | **lucide-react** | Consistent stroke line-icons |
-| Toasts | **sonner** | Rich success/warning notifications |
-| PDF | **jsPDF + html2canvas** | Client-side branded export |
-| Font | Bricolage Grotesque + Manrope + JetBrains Mono | Distinctive, non-slop |
-
-### Component & route map
-
-```mermaid
-graph TB
-  App["App.js<br/>&lt;ThemeProvider&gt;&lt;AuthProvider&gt;&lt;BrowserRouter&gt;"]
-
-  App --> Layout["Layout.jsx<br/>Sidebar + TopBar + Outlet"]
-  App --> AuthPages["Auth pages<br/>(no layout)"]
-  App --> Public["Public routes"]
-
-  Layout --> Landing["/"]
-  Layout --> Platform["/platform"]
-  Layout --> Solutions["/solutions"]
-  Layout --> HowItWorks["/how-it-works"]
-  Layout --> About["/about"]
-  Layout --> Contact["/contact"]
-  Layout --> Protected{{"Protected wrapper<br/>checks useAuth()"}}
-  Protected --> Dashboard["/dashboard"]
-  Protected --> Alerts["/alerts"]
-  Protected --> Reports["/reports"]
-  Protected --> Team["/team (admin only)"]
-
-  AuthPages --> Login["/login"]
-  AuthPages --> Register["/register"]
-  AuthPages --> Forgot["/forgot-password"]
-  AuthPages --> Reset["/reset-password"]
-
-  Public --> Snapshot["/s/:token<br/>read-only public"]
-
-  Dashboard --> KPI["KPI cards (polling)"]
-  Dashboard --> Chart["Energy chart (SVG)"]
-  Dashboard --> Findings["Findings + filter"]
-  Dashboard --> AIPanel["AiInsightPanel (forwardRef)"]
-  Dashboard --> Tour["OnboardingTour"]
-  Dashboard --> PortfolioSel["Portfolio selector"]
-
-  AIPanel --> ChatTab["Chat tab (SSE stream)"]
-  AIPanel --> HistoryTab["History tab (sessions)"]
-
-  TopBar["TopBar.jsx"] --> ThemeToggle["Theme toggle"]
-  TopBar --> ProfileMenu["Profile menu → PasswordChangeModal"]
-```
-
-### Frontend runtime data flow
-
-```mermaid
-flowchart LR
-  User((User)) --> Comp[Component]
-  Comp -->|"useAuth() / useTheme()"| Ctx[Context]
-  Comp -->|api.get/post| Axios
-  Axios -->|"interceptor: Bearer"| Backend[(FastAPI)]
-  Backend -->|JSON / SSE| Axios
-  Axios --> State[useState / useRef]
-  State --> Comp
-  Ctx <-->|persist| LStore[(localStorage)]
-```
-
-### Key files
-
-```
-/app/frontend/src/
-├── App.js                       # Router + Providers
-├── index.css                    # Design tokens (light + dark)
-├── context/
-│   ├── AuthContext.js           # user, login, register, logout
-│   └── ThemeContext.js          # theme, toggle (persists)
-├── lib/api.js                   # axios instance + formatApiError
-├── components/
-│   ├── Layout.jsx               # Sidebar + TopBar + Outlet
-│   ├── Sidebar.jsx              # Vertical nav (RBAC-aware)
-│   ├── TopBar.jsx               # Horizontal nav + profile menu
-│   ├── OnboardingTour.jsx       # 4-step spotlight tour
-│   └── PasswordChangeModal.jsx  # Change-password dialog
-└── pages/
-    ├── Landing.jsx  Platform.jsx  Solutions.jsx
-    ├── HowItWorks.jsx  About.jsx  Contact.jsx
-    ├── Login.jsx  Register.jsx
-    ├── ForgotPassword.jsx  ResetPassword.jsx
-    ├── Dashboard.jsx            # polling + AI + filter + share + export
-    ├── Alerts.jsx               # Alert Center
-    ├── Reports.jsx              # Scheduler + Branding
-    ├── Team.jsx                 # RBAC invite / list / remove
-    └── Snapshot.jsx             # Public read-only dashboard
-```
-
----
-
-## 03 · Detailed Backend Architecture
-
-### Tech Stack (backend)
-
-| Layer | Choice | Rationale |
-| --- | --- | --- |
-| Framework | **FastAPI 0.110** | Async, Pydantic, OpenAPI |
-| ASGI Server | **uvicorn 0.25** (supervised) | Prod-ready reload |
-| Data client | **motor 3.3** (async pymongo) | Non-blocking Mongo I/O |
-| Validation | **Pydantic v2** | Type-safe request models |
-| Auth | **PyJWT + bcrypt** | HS256 tokens, salted hashes |
-| AI SDK | **emergentintegrations 0.2** | Unified Claude/GPT/Gemini streaming |
-| Config | **python-dotenv** | Loaded before any import that needs it |
-
-### Backend layered architecture
-
-```mermaid
-flowchart TB
-  subgraph API["🌐 API Layer (FastAPI)"]
-    Router["APIRouter(prefix=/api)"]
-    Middleware["CORS · Bearer extraction"]
-    Deps["Dependencies:<br/>get_current_user<br/>require_admin"]
-  end
-
-  subgraph Domain["🧠 Domain Logic"]
-    AuthSvc["Auth Service<br/>(hash · verify · JWT · seed)"]
-    PortfolioSvc["Portfolio Service<br/>(jittered metrics · baseline shift)"]
-    AlertSvc["Alerts Service<br/>(list · push · acknowledge)"]
-    ReportSvc["Reports Service<br/>(schedule · branding · preview)"]
-    SnapshotSvc["Snapshots Service<br/>(create · public read)"]
-    AISvc["AI Insight Service<br/>(session · stream · persist)"]
-  end
-
-  subgraph Data["💾 Data Access (motor)"]
-    Users[(users)]
-    Portfolios[(portfolios)]
-    Alerts[(alerts)]
-    Schedules[(report_schedules)]
-    Branding[(branding)]
-    Snapshots[(snapshots · TTL)]
-    Sessions[(ai_sessions)]
-    Messages[(ai_messages)]
-    Reset[(password_reset_tokens · TTL)]
-    Contact[(contact_messages)]
-    LoginAtt[(login_attempts)]
-  end
-
-  subgraph Startup["🚀 Startup Hook"]
-    Idx["Create indexes<br/>(unique, TTL, compound)"]
-    Seed["Seed admin user"]
-  end
-
-  Router --> Middleware --> Deps
-  Deps --> Domain
-  Domain --> Data
-  Startup --> Data
-```
-
-### Backend request path
+## 2. Auth + workspace switch flow
 
 ```mermaid
 sequenceDiagram
-  participant C as Client
-  participant U as uvicorn
-  participant M as CORS Middleware
-  participant D as get_current_user Dep
-  participant H as Handler
-  participant DB as MongoDB
+    autonumber
+    participant U as User
+    participant FE as React App
+    participant BE as FastAPI
+    participant DB as MongoDB
 
-  C->>U: HTTPS /api/portfolio/metrics
-  U->>M: pass request
-  M->>D: extract Bearer token
-  D->>D: jwt.decode + verify type=access
-  D->>DB: users.find_one({id})
-  DB-->>D: user (minus password_hash)
-  D->>H: inject user dict
-  H->>DB: portfolios.find_one({id, user_id})
-  H->>H: jitter metrics · rotate finding
-  H-->>C: 200 JSON
+    U->>FE: POST /login (email, password)
+    FE->>BE: POST /api/auth/login
+    BE->>DB: find_one(users, email)
+    DB-->>BE: user + password_hash
+    BE->>BE: bcrypt.verify + brute-force check
+    BE-->>FE: {access_token, user{id,email,name,role,roles?}}
+    FE->>FE: localStorage["gs_token"] = token
+    FE->>FE: navigate(landingFor(role))
+
+    Note over FE,BE: Later — user with 2+ roles switches
+    U->>FE: TopBar → Workspace Switcher → Executive
+    FE->>BE: POST /api/rbac/switch {role:"executive"}
+    BE->>BE: check role in effective_roles(user) OR admin
+    BE->>DB: update users.role=executive; roles=[…, executive]
+    BE-->>FE: {access_token', active_role, roles}
+    FE->>FE: replace token, GET /api/auth/me
+    FE->>FE: navigate(landingFor("executive"))
 ```
 
-### MongoDB collections & indexes
-
-| Collection | Key indexes | Purpose |
-| --- | --- | --- |
-| `users` | `email` unique, `id` unique | Auth |
-| `password_reset_tokens` | `token` unique, `expires_at` TTL | Forgot-password links |
-| `ai_sessions` | `user_id` | Per-user chat sessions |
-| `ai_messages` | `session_id` | Message history |
-| `report_schedules` | `user_id` unique | Report scheduler config |
-| `branding` | `user_id` unique | Company logo + note |
-| `portfolios` | `(user_id, id)` compound | Multi-portfolio |
-| `alerts` | `(user_id, created_at desc)` | Alert Center feed |
-| `snapshots` | `token` unique, `expires_at` TTL | Public share links |
-| `contact_messages` | — | Marketing site inbox |
-| `login_attempts` | `identifier` | Brute-force guard |
+Key rules:
+- Admin is a super-role — always allowed on any endpoint & any switch target.
+- `roles[]` is ALWAYS kept in sync so switching is reversible (admin self-lockout
+  fix, iteration 14).
+- All fleet/alerts/team endpoints run through `rbac.role_required(...)` on the
+  server — the frontend guards are a UX layer, not the security boundary.
 
 ---
 
-## 04 · APIs and Tech Stack
-
-### API surface (all under `/api`, Bearer JWT unless noted)
-
-| Method | Path | Auth | Description |
-| --- | --- | --- | --- |
-| **Auth** | | | |
-| POST | `/auth/register` | Public | Create user + return JWT |
-| POST | `/auth/login` | Public | Return JWT |
-| GET | `/auth/me` | Bearer | Current user |
-| POST | `/auth/change-password` | Bearer | Rotate password |
-| POST | `/auth/forgot-password` | Public | Generate reset link (console-logged) |
-| POST | `/auth/reset-password` | Public | Consume reset token |
-| **Portfolios** | | | |
-| GET | `/portfolios` | Bearer | List (auto-seed default) |
-| POST | `/portfolios` | Bearer | Create |
-| DELETE | `/portfolios/{id}` | Bearer | Remove |
-| **Metrics** | | | |
-| GET | `/portfolio/metrics?portfolio_id=` | Bearer | Jittered KPIs + findings |
-| **Alerts** | | | |
-| GET | `/alerts?severity=&code=&since_hours=` | Bearer | List filtered |
-| POST | `/alerts` | Bearer | Push new alert |
-| POST | `/alerts/{id}/acknowledge` | Bearer | Mark acknowledged |
-| **Reports** | | | |
-| GET | `/reports/schedule` | Bearer | Current cadence config |
-| POST | `/reports/schedule` | Bearer | Upsert schedule |
-| POST | `/reports/preview` | Bearer | Simulate delivery |
-| GET | `/reports/branding` | Bearer | Read branding |
-| POST | `/reports/branding` | Bearer | Upsert branding |
-| **Snapshots** | | | |
-| POST | `/snapshots` | Bearer | Create public snapshot |
-| GET | `/public/snapshots/{token}` | Public | Read-only view (no auth) |
-| **AI** | | | |
-| POST | `/ai/insight` | Bearer | SSE stream — Claude reply |
-| GET | `/ai/sessions` | Bearer | List past chats |
-| GET | `/ai/sessions/{id}` | Bearer | Get session + messages |
-| DELETE | `/ai/sessions/{id}` | Bearer | Delete chat |
-| **Team (admin only)** | | | |
-| GET | `/team/users` | Admin | List all users |
-| POST | `/team/invite` | Admin | Create user + temp password |
-| DELETE | `/team/users/{id}` | Admin | Remove user |
-| **Misc** | | | |
-| POST | `/contact` | Public | Landing-page contact form |
-
-### API tech stack
-
-```mermaid
-flowchart LR
-  Client["React fetch/axios"]
-  Ingress["K8s Ingress<br/>TLS termination"]
-  FastAPI["FastAPI + Pydantic v2<br/>uvicorn ASGI"]
-  Motor["motor async driver"]
-  Mongo[(MongoDB)]
-  LLM["Anthropic Claude Sonnet 5<br/>via emergentintegrations"]
-
-  Client -->|"HTTPS · JSON · SSE"| Ingress
-  Ingress -->|"HTTP · /api/*"| FastAPI
-  FastAPI -->|"async I/O"| Motor
-  Motor --> Mongo
-  FastAPI -->|"stream_message()"| LLM
-```
-
-### Contract examples
-
-```json
-// POST /api/auth/login   →   200
-{
-  "access_token": "eyJ…",
-  "token_type": "bearer",
-  "user": { "id": "…", "email": "…", "name": "…", "role": "admin" }
-}
-```
-
-```
-// POST /api/ai/insight   →   text/event-stream
-data: {"session_id":"c8f9…"}
-
-data: {"delta":"I don't have live telemetry for INV-04,"}
-data: {"delta":" so I can't confirm severity…"}
-data: {"done": true}
-```
-
----
-
-## 05 · Test Suite
-
-### Test pyramid
+## 3. Role → landing page map
 
 ```mermaid
 flowchart TB
-  E2E["🎯 E2E · Playwright (headless Chromium)<br/>Auth · Dashboard flow · AI streaming · PDF export"]
-  API["🔌 API · pytest + httpx / curl<br/>63 tests across 3 iterations<br/>Auth, RBAC, TTL, SSE, validation"]
-  Smoke["💨 Smoke · curl / python3 -c<br/>Post-fix regression"]
+    L[Login] --> D{role?}
+    D -->|admin| A[/admin]
+    D -->|executive| O[/overview]
+    D -->|asset_manager| B[/dashboard]
+    D -->|om_manager| Op[/operations]
+    D -->|technician| M[/my-work]
+    D -->|performance_engineer| P[/performance]
+    D -->|client_viewer| C[/client-portal]
 
-  E2E --> API --> Smoke
-  style E2E fill:#d7f7e6,stroke:#10b981
-  style API fill:#eaf0e3,stroke:#059669
-  style Smoke fill:#ffffff,stroke:#dfe5d8
+    A --- A1[User mgmt · Multi-role · Client scope · System health]
+    O --- O1[Portfolio KPIs · Portfolio mix · Top risks · CO2]
+    B --- B1[Category switcher · Fleet KPIs · Sites table · Alarms · WOs · AI panel]
+    Op --- Op1[Ops KPIs · Alarms · WOs · Resolution rate]
+    M --- M1[Mobile · Alarm cards · Diagnose sheet · Camera evidence]
+    P --- P1[Yield · Degradation · Benchmarking · Root cause pareto · Data quality]
+    C --- C1[Read-only tiles · Approved sites only · Scope by admin]
 ```
-
-### Coverage by iteration
-
-| Iteration | Backend | Frontend | Focus |
-| --- | --- | --- | --- |
-| 1 | 12/12 | ✅ full | Auth, contact, protected metrics |
-| 2 | 20/20 | ✅ full | Password reset, polling, Claude SSE, PDF export |
-| 3 | 43/43 | ✅ full + minor UI notes | Sessions, alerts, team RBAC, scheduler |
-| Total | **63/63 backend, 100 % frontend flows** | | |
-
-### Test authoring conventions
-
-- **`data-testid`** on every interactive element — kebab-case, function-descriptive.
-- Backend tests live under `/app/backend/tests/` (created by test-agent).
-- E2E runs against the real preview URL (`REACT_APP_BACKEND_URL`), never localhost, so ingress + CORS are exercised.
-- Test credentials are read from `/app/memory/test_credentials.md` — never hard-coded.
-- Reports written to `/app/test_reports/iteration_{n}.json`.
-
-### Testing tools
-
-| Tool | Where | Purpose |
-| --- | --- | --- |
-| **pytest** + **httpx** | Backend | Endpoint contracts, auth, RBAC, TTL |
-| **Playwright (async python)** | E2E | UI flows, streaming, PDF download |
-| **curl + python3 -c** | Smoke | Quick regression after fixes |
-| **mongosh** | Manual | Index + document verification |
-| **testing_agent tool** | Orchestrator | Runs both suites & files reports |
 
 ---
 
-## 06 · Agentic AI Workflows and Model Details with Orchestration
-
-### Agent architecture
-
-```mermaid
-graph TB
-  subgraph Frontend["🖥 Frontend (Dashboard)"]
-    Poll["Poll /portfolio/metrics<br/>every 5s"]
-    Detect["Detect new HIGH-severity finding"]
-    UI["AiInsightPanel<br/>(Chat + History tabs)"]
-    Ctx["Finding context chips"]
-  end
-
-  subgraph Backend["⚙️ Backend Orchestrator"]
-    Insight["POST /api/ai/insight<br/>(StreamingResponse SSE)"]
-    Session["Session lifecycle:<br/>create if new · fetch if session_id"]
-    Persist["Persist user + assistant<br/>messages to ai_messages"]
-    Prompt["System prompt builder<br/>+ optional finding context<br/>+ 'auto' flag for alerts"]
-  end
-
-  subgraph LLM["🧠 Model Layer (emergentintegrations)"]
-    Chat["LlmChat(...)"]
-    Model[".with_model('anthropic','claude-sonnet-5')"]
-    Stream["chat.stream_message()"]
-  end
-
-  subgraph Provider["☁️ Anthropic API"]
-    Claude["claude-sonnet-5<br/>Explainable · Concise"]
-  end
-
-  Poll --> Detect
-  Detect -- "auto=true" --> Insight
-  UI -- "manual ask · session_id" --> Insight
-  Ctx --> UI
-
-  Insight --> Session
-  Session --> Prompt
-  Prompt --> Chat
-  Chat --> Model
-  Model --> Stream
-  Stream --> Claude
-  Claude -- "TextDelta · StreamDone" --> Stream
-  Stream --> Insight
-  Insight -- "SSE data: {delta}" --> UI
-  Insight --> Persist
-```
-
-### Prompt & context assembly
+## 4. Fleet dataset ingestion (seed on startup)
 
 ```mermaid
 flowchart LR
-  Q["User question<br/>e.g. 'Explain INV-04'"]
-  F["finding_code = INV-04"]
-  Auto["auto flag<br/>(true when polling detects anomaly)"]
-  Sys["System prompt<br/>role · tone · guardrails"]
-  Ctx["Finding context sentence"]
-  A["Auto-alert framing<br/>(be brief · actionable)"]
-  Payload["Final UserMessage.text"]
+    XLSX[data/green_solutions_sample_data.xlsx]
+    XLSX -->|openpyxl read_only=True| Sheets
+    subgraph Sheets["7 sheets"]
+        S1[Sites 380]
+        S2[Assets 5473]
+        S3[Telemetry 60000]
+        S4[Weather 9120]
+        S5[Performance 380]
+        S6[Alarms 800]
+        S7[Work_Orders 141]
+    end
 
-  Sys --> Payload
-  Q --> Payload
-  F --> Ctx --> Payload
-  Auto --> A --> Payload
+    Sheets -->|batch insert_many 2000| DB[(fleet_* collections)]
+    DB --> IDX[create_index<br/>site_id / timestamp / status]
+    IDX --> Guard{fleet_sites empty?}
+    Guard -->|no| Skip[Skip — idempotent]
+    Guard -->|yes at first boot| Insert
 ```
 
-**System prompt (verbatim):**
-> You are the Green Solutions AI Insight Assistant — an explainable AI for renewable energy operations. Answer concisely (max 5 short sentences). Ground answers in solar/wind operations: inverters, strings, soiling, thermal drift, communication dropouts, curtailment. When you make a recommendation, prefix it with 'Action:'. Never invent SLAs or financials.
-
-### Streaming lifecycle
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant UI as Dashboard AiInsightPanel
-  participant BE as FastAPI /api/ai/insight
-  participant M as ai_sessions / ai_messages
-  participant EI as emergentintegrations.LlmChat
-  participant CL as Claude Sonnet 5
-
-  UI->>BE: POST { question, finding_code, session_id?, auto? }
-  alt no session_id
-    BE->>M: insert ai_sessions {id, user_id, title}
-  end
-  BE->>M: insert ai_messages (user)
-  BE->>EI: LlmChat(system_message).with_model("anthropic","claude-sonnet-5")
-  BE->>EI: stream_message(UserMessage(text))
-  EI->>CL: HTTP stream
-  loop tokens
-    CL-->>EI: TextDelta
-    EI-->>BE: TextDelta
-    BE-->>UI: SSE "data: {delta:'…'}"
-    UI->>UI: append to last assistant bubble
-  end
-  CL-->>EI: StreamDone
-  EI-->>BE: StreamDone
-  BE-->>UI: SSE "data: {done:true}"
-  BE->>M: insert ai_messages (assistant full_text)
-  BE->>M: update ai_sessions.updated_at
-```
-
-### Model details
-
-| Attribute | Value |
-| --- | --- |
-| Provider | Anthropic |
-| Model | `claude-sonnet-5` |
-| SDK | `emergentintegrations 0.2` |
-| Auth | `EMERGENT_LLM_KEY` (universal, injected via env) |
-| Streaming | `stream_message()` (SSE) — always used |
-| Response headers | `text/event-stream` + `X-Accel-Buffering: no` (nginx flush) |
-| Session id (LLM-side) | `f"insight-{session_id}"` — stable per convo |
-| Session id (Mongo-side) | `ai_sessions.id` (uuid4) — owns the message log |
-| Message store | `ai_messages` — user + assistant, plus `auto` + `finding_code` metadata |
-| Guardrails | System prompt (concise · grounded · no financial hallucination) |
-
-### Autonomous behaviors (agent triggers)
-
-| Trigger | Origin | Payload | Effect |
-| --- | --- | --- | --- |
-| Manual chat send | User → `ai-send` | free-text | `askAbout` — normal Claude reply |
-| Finding row → "ASK AI" | User → `ask-ai-<code>` | code + title | `askAbout(code)` — scoped explanation |
-| **Anomaly auto-alert** | Polling loop detects new high-sev code | code + title, `auto=true` | Toast + `autoAsk(code)` + push to Alert Center |
-| Session resume | History tab → `session-<id>` | session_id | Fetch messages, continue same LLM thread |
-
-### Extensibility hooks
-
-- `LlmChat.with_model("openai" | "gemini" | "anthropic", "...")` — swap model per env / role.
-- `custom_headers={...}` — Anthropic `task-budgets-2026-03-13` header when scaling to Opus 4.7.
-- Extra body (`extra_body`) — enable `thinking: adaptive` for deeper reasoning modes when needed.
-- Persist arbitrary tool-call metadata in `ai_messages` for future function-calling / RAG additions.
+The seed runs at startup and is a no-op after the first boot
+(`if count_documents({}) > 0: return`). It also builds indexes on site_id, timestamp,
+and status per collection.
 
 ---
 
-## Appendix A · Environment configuration
+## 5. Live-refresh telemetry (sliding window)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant FE as Dashboard/SiteDetail
+    participant BE as /api/fleet/telemetry
+    participant DB as fleet_telemetry
+
+    FE->>BE: GET ?site_id=S00001&hours=24
+    BE->>DB: aggregate {$group: timestamp, $sum: power_kW, ...}
+    DB-->>BE: 24-row hourly series
+    BE->>BE: offset = int(time()//30) % max(1, total-window+1)
+    BE-->>FE: rows[offset : offset+window]  + {live:true}
+    FE->>FE: setInterval(fetch, 5000)
+    Note over FE,BE: Next call ~5s later → same 30s bucket → same slice
+    Note over FE,BE: Cross a 30s boundary → offset++ → slice rotates
+```
+
+Simulates "live" streaming with a static dataset. Aggregation happens on Mongo,
+not in-process, so the window is cheap.
+
+---
+
+## 6. AI Insight (streaming SSE)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant FE as AiInsightPanel
+    participant BE as /api/ai/insight
+    participant AI as Claude Sonnet 5
+
+    U->>FE: Ask question (with optional finding_code)
+    FE->>BE: POST {question, finding_code, session_id?, auto?}
+    BE->>BE: insert ai_messages(role=user)
+    BE->>AI: LlmChat.stream_message()
+    loop until StreamDone
+        AI-->>BE: TextDelta(content)
+        BE-->>FE: data: {"delta": "..."}\n\n
+        FE->>FE: append to last message
+    end
+    BE->>BE: insert ai_messages(role=assistant, full_text)
+    BE-->>FE: data: {"done": true}
+```
+
+- Uses `emergentintegrations` library + `EMERGENT_LLM_KEY`.
+- Session-scoped chat history stored in `ai_sessions` + `ai_messages`.
+- Frontend supports session list, delete, and auto-alert (triggered by new
+  high-severity findings).
+
+---
+
+## 7. Client Viewer — scoped read-only view
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Admin
+    participant BE as FastAPI
+    participant DB as MongoDB
+    participant Client as Client Viewer
+
+    Admin->>BE: PATCH /api/team/users/{id}/client-scope<br/>{allowed_site_ids, allowed_categories}
+    BE->>DB: users.update client_scope
+    BE-->>Admin: {ok, client_scope}
+
+    Client->>BE: GET /api/client/portfolio
+    BE->>DB: find sites WHERE site_id IN scope OR site_type IN scope
+    DB-->>BE: sites[]
+    BE->>DB: aggregate latest performance per site
+    DB-->>BE: perf_by_site
+    BE-->>Client: {kpis, sites[]}  ← only approved sites, ever
+
+    Client->>BE: GET /api/fleet/kpis (fleet-wide)
+    Note over Client,BE: Same endpoint returns fleet-wide<br/>frontend guards route them to /client-portal
+```
+
+Frontend enforces the walled garden by refusing to render Dashboard/Alerts etc. for
+`client_viewer`. Backend `/api/client/portfolio` scopes at the query layer, so no
+data leaks even if the frontend guard is bypassed.
+
+---
+
+## 8. Field Mobile My Work — evidence upload
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Tech as Technician (mobile)
+    participant FE as MyWork page
+    participant BE as /api/evidence
+    participant TP as threadpool
+    participant OBJ as Emergent Object Storage
+    participant DB as db.evidence
+
+    Tech->>FE: Tap alarm card → DiagnoseSheet opens
+    Tech->>FE: Tap "Add Photo" → capture=environment triggers camera
+    FE->>BE: POST /api/evidence (multipart: file, alarm_id, site_id)
+    BE->>BE: validate size ≤8MB + image mimetype
+    BE->>TP: run_in_threadpool(storage.put_object)
+    TP->>OBJ: PUT green-solutions/evidence/{uid}/{eid}.jpg
+    OBJ-->>TP: {path, size, etag}
+    TP-->>BE: result
+    BE->>DB: insert evidence record
+    BE-->>FE: {id, storage_path, ...}
+    FE->>FE: EvidenceThumb — fetch bytes as blob URL
+    Tech->>FE: Tick checklist → Mark Resolved
+    FE->>BE: POST /api/alerts + POST /api/actions
+    BE-->>FE: 200
+```
+
+- `<img>` tags cannot send `Authorization` headers, so the file endpoint accepts
+  `?auth=<jwt>` as a fallback for browser image loading.
+- Non-admins only see their own uploads; admins see all.
+- All I/O runs in threadpool so an in-flight upload doesn't block the event loop.
+
+---
+
+## 9. Data model (MongoDB collections)
+
+| Collection            | Purpose                                       | Key indexes                       |
+|-----------------------|-----------------------------------------------|------------------------------------|
+| `users`               | Auth + role + roles[] + client_scope           | email (unique), id (unique)        |
+| `password_reset_tokens` | Password reset (TTL)                         | expires_at (TTL), token (unique)   |
+| `login_attempts`      | Brute-force lockout                            | identifier                         |
+| `ai_sessions`         | Per-user chat sessions                         | user_id                            |
+| `ai_messages`         | User + assistant turns                         | session_id                         |
+| `portfolios`          | User-defined portfolios (legacy)               | (user_id, id)                      |
+| `alerts`              | User-tracked findings (legacy, RBAC-gated)     | (user_id, created_at DESC)         |
+| `snapshots`           | Public shareable snapshots (TTL 14d)           | token (unique), expires_at (TTL)   |
+| `branding`            | Per-user report branding                       | user_id (unique)                   |
+| `actions`             | AI-recommended actions accepted by user        | (user_id, created_at DESC)         |
+| `report_schedules`    | Weekly digest cadence                          | user_id (unique)                   |
+| `contact_messages`    | Public marketing contact form                  | —                                  |
+| **`fleet_sites`**     | 380 real sites                                  | site_id, site_type, state          |
+| **`fleet_assets`**    | 5,473 inverters/combiners/trackers/BESS/etc.   | site_id, asset_id, asset_type      |
+| **`fleet_telemetry`** | 60,000 hourly power_kW readings                | (site_id, asset_id, timestamp DESC)|
+| **`fleet_weather`**   | 9,120 hourly weather rows                      | (site_id, timestamp DESC)          |
+| **`fleet_performance`** | 380 daily PR% + availability + revenue loss   | (site_id, date DESC)               |
+| **`fleet_alarms`**    | 800 alarms                                     | site_id, timestamp DESC, severity  |
+| **`fleet_work_orders`** | 141 work orders                                | site_id, status, alarm_id          |
+| **`evidence`**        | Technician-uploaded photos + metadata          | user_id, alarm_id, created_at      |
+
+---
+
+## 10. Repository layout
 
 ```
-backend/.env
-  MONGO_URL=…                 # local mongo
-  DB_NAME=test_database
-  CORS_ORIGINS=*
-  JWT_SECRET=<64 hex>
-  ADMIN_EMAIL=admin@greensolutions.ai
-  ADMIN_PASSWORD=Admin@123
-  FRONTEND_URL=https://…      # used for reset + snapshot URLs
-  EMERGENT_LLM_KEY=sk-emergent-…
-
-frontend/.env
-  REACT_APP_BACKEND_URL=https://…preview.emergentagent.com
-  WDS_SOCKET_PORT=443
-```
-
-## Appendix B · Directory map
-
-```
-/app
+/app/
 ├── backend/
-│   ├── server.py               # All routes + models + startup + AI orchestration
+│   ├── server.py                # thin FastAPI entry — mounts routers, startup hooks
+│   ├── deps.py                  # DB client + JWT + bcrypt + get_current_user
+│   ├── rbac.py                  # MVP_ROLES, ROLE_LANDING, role_required()
+│   ├── models.py                # Pydantic request models
+│   ├── storage.py               # Emergent Object Storage helper
+│   ├── seed_dataset.py          # XLSX → Mongo idempotent seed
+│   ├── data/
+│   │   └── green_solutions_sample_data.xlsx
+│   ├── routers/
+│   │   ├── auth.py              # /auth/* endpoints
+│   │   ├── ai.py                # /ai/insight (SSE) + session mgmt
+│   │   ├── core.py              # /contact, /portfolios, /team, /alerts, /snapshots, /actions, /reports, /weekly-digest
+│   │   ├── fleet.py             # /fleet/* — 9 endpoints on real data
+│   │   └── rbac_ext.py          # /rbac/*, /team/users/{id}/roles, /client/*, /evidence/*
+│   ├── tests/                   # pytest — 245 tests across iterations
 │   ├── requirements.txt
-│   ├── tests/                  # pytest suites (backend_test.py, test_iteration3.py)
 │   └── .env
 ├── frontend/
-│   ├── src/{App.js,index.css,context/,lib/,components/,pages/}
-│   ├── package.json            # jspdf, html2canvas, sonner, framer-motion, shadcn/ui, …
+│   ├── src/
+│   │   ├── App.js               # Router with <Protected allow={[...]}>
+│   │   ├── index.css            # theme (bright white + emerald green)
+│   │   ├── lib/
+│   │   │   ├── api.js           # axios instance + interceptor
+│   │   │   └── roles.js         # NAV + LANDING + visibleItems + landingFor
+│   │   ├── context/
+│   │   │   ├── AuthContext.js   # login/register/logout/switchWorkspace
+│   │   │   └── ThemeContext.js
+│   │   ├── components/
+│   │   │   ├── Layout.jsx       # Sidebar + TopBar + <Outlet/>
+│   │   │   ├── Sidebar.jsx      # Role-scoped nav
+│   │   │   ├── TopBar.jsx       # Profile menu with mobile workspace switcher
+│   │   │   ├── WorkspaceSwitcher.jsx    # desktop switcher
+│   │   │   ├── OnboardingTour.jsx
+│   │   │   ├── PasswordChangeModal.jsx
+│   │   │   ├── dashboard/       # CategorySwitcher, FleetKpiCards, SitesTable, AlarmsFeed, WorkOrdersCard, AiInsightPanel
+│   │   │   └── ui/              # shadcn primitives
+│   │   └── pages/
+│   │       ├── Landing.jsx · Platform.jsx · Solutions.jsx · HowItWorks.jsx · About.jsx · Contact.jsx
+│   │       ├── Login.jsx · Register.jsx · ForgotPassword.jsx · ResetPassword.jsx
+│   │       ├── Dashboard.jsx · SiteDetail.jsx · Alerts.jsx · Reports.jsx · Team.jsx · Snapshot.jsx
+│   │       ├── ExecutiveOverview.jsx    # /overview
+│   │       ├── OperationsCenter.jsx     # /operations
+│   │       ├── MyWork.jsx               # /my-work (mobile-first + evidence upload)
+│   │       ├── PerformanceAnalytics.jsx # /performance
+│   │       ├── ClientPortal.jsx         # /client-portal
+│   │       └── Administration.jsx       # /admin  (+ Client Scope modal)
+│   ├── package.json
 │   └── .env
-├── memory/
-│   ├── PRD.md                  # Roadmap & backlog
-│   ├── test_credentials.md     # Admin creds, endpoint index
-│   └── ARCHITECTURE.md         # ← this file
-├── test_reports/               # iteration_*.json — testing-agent artefacts
-└── auth_testing.md             # Auth playbook (from integration expert)
+└── memory/
+    ├── PRD.md                   # Product Requirements
+    ├── ARCHITECTURE.md          # this file
+    └── test_credentials.md      # 7 demo accounts
 ```
+
+---
+
+## 11. Environment variables
+
+| Variable                | Where           | Required | Notes                                 |
+|-------------------------|-----------------|----------|---------------------------------------|
+| `MONGO_URL`             | backend/.env    | ✅       | e.g. `mongodb://localhost:27017`      |
+| `DB_NAME`               | backend/.env    | ✅       | e.g. `test_database`                  |
+| `JWT_SECRET`            | backend/.env    | ✅       | Long random string                    |
+| `EMERGENT_LLM_KEY`      | backend/.env    | ✅       | Powers AI + Object Storage            |
+| `INTEGRATION_PROXY_URL` | backend/.env    | ⚠️       | Emergent internal — defaults if unset |
+| `ADMIN_EMAIL`           | backend/.env    | ⛔       | Defaults to `admin@greensolutions.ai` |
+| `ADMIN_PASSWORD`        | backend/.env    | ⛔       | Defaults to `Admin@123`               |
+| `FRONTEND_URL`          | backend/.env    | ⛔       | Used in password reset + snapshot URLs|
+| `REACT_APP_BACKEND_URL` | frontend/.env   | ✅       | Full external URL, no trailing slash  |
+
+---
+
+## 12. Testing
+
+- **Backend:** `pytest /app/backend/tests/` — 245 tests as of iteration 14
+  (auth, RBAC, fleet endpoints, storage, evidence, client scope, workspace switch).
+- **Frontend:** Playwright flows exercised by the Emergent testing agent —
+  every role's login → landing → cross-role blocking → mobile My Work → evidence
+  upload.
+- **Iteration reports:** `/app/test_reports/iteration_*.json`
+  (14 iterations of test-and-fix loops).
