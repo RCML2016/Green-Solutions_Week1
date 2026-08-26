@@ -38,7 +38,9 @@ export default function Reports() {
           cover_note: br.cover_note || "",
           logo_data_url: br.logo_data_url || "",
         });
-      } catch {}
+      } catch (e) {
+        console.warn("Reports config load failed:", e?.message);
+      }
       finally { setLoading(false); }
     })();
   }, []);

@@ -46,7 +46,10 @@ export default function OnboardingTour() {
         const t = setTimeout(() => setVisible(true), 900);
         return () => clearTimeout(t);
       }
-    } catch {}
+    } catch (e) {
+      // Storage unavailable — skip the tour rather than showing it every load
+      console.warn("Tour visibility check failed:", e?.message);
+    }
   }, []);
 
   useEffect(() => {
@@ -73,7 +76,11 @@ export default function OnboardingTour() {
   }, [step, visible]);
 
   const finish = () => {
-    try { localStorage.setItem(LS_KEY, "1"); } catch {}
+    try {
+      localStorage.setItem(LS_KEY, "1");
+    } catch (e) {
+      console.warn("Tour completion persistence failed:", e?.message);
+    }
     setVisible(false);
   };
 

@@ -41,7 +41,9 @@ export default function Dashboard() {
         const { data } = await api.get("/portfolios");
         setPortfolios(data);
         if (data.length && !activePid) setActivePid(data[0].id);
-      } catch {}
+      } catch (e) {
+        console.warn("Failed to load portfolios:", e?.message);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,7 +127,10 @@ export default function Dashboard() {
         setData(fresh);
         setPulse(true);
         setTimeout(() => mounted && setPulse(false), 700);
-      } catch {}
+      } catch (e) {
+        // Transient poll errors are expected (offline, 401 expiring, etc.) — surface only in console
+        console.warn("Metrics poll failed:", e?.message);
+      }
       finally { if (mounted) setLoading(false); }
     };
     fetchOnce();
@@ -144,9 +149,13 @@ export default function Dashboard() {
     if (!captureRef.current) return;
     setExporting(true);
     try {
-      // Load branding
+      // Load branding (optional — export still works without it)
       let branding = { company_name: "", cover_note: "", logo_data_url: "" };
-      try { branding = (await api.get("/reports/branding")).data; } catch {}
+      try {
+        branding = (await api.get("/reports/branding")).data;
+      } catch (e) {
+        console.warn("Branding fetch failed, using defaults:", e?.message);
+      }
 
       const canvas = await html2canvas(captureRef.current, {
         backgroundColor: getComputedStyle(document.body).backgroundColor || "#f4f7f0",
@@ -166,7 +175,12 @@ export default function Dashboard() {
         pdf.setFillColor(16, 185, 129);
         pdf.rect(0, 0, pageW, 8, "F");
         if (branding.logo_data_url) {
-          try { pdf.addImage(branding.logo_data_url, "PNG", 40, 60, 120, 60, undefined, "FAST"); } catch {}
+          try {
+            pdf.addImage(branding.logo_data_url, "PNG", 40, 60, 120, 60, undefined, "FAST");
+          } catch (e) {
+            // Bad data URL — skip the logo but keep exporting
+            console.warn("Logo embed failed:", e?.message);
+          }
         }
         pdf.setTextColor(8, 43, 28);
         pdf.setFontSize(28);
@@ -294,7 +308,15 @@ export default function Dashboard() {
           <span className="text-[10px] font-mono text-[color:var(--ink-3)]">READ-ONLY LINK · EXPIRES IN 14D</span>
           <code className="text-xs text-[color:var(--ink)] truncate flex-1">{shareLink}</code>
           <button
-            onClick={() => { navigator.clipboard.writeText(shareLink); toast.success("Copied"); }}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(shareLink);
+                toast.success("Copied");
+              } catch (e) {
+                console.warn("Clipboard write failed:", e?.message);
+                toast.error("Copy failed — select the link manually");
+              }
+            }}
             className="p-1.5 rounded-lg hover:bg-[color:var(--brand-tint)] text-[color:var(--ink-3)] hover:text-[color:var(--brand-3)]"
             data-testid="share-copy"
           >
@@ -303,6 +325,7 @@ export default function Dashboard() {
           <button
             onClick={() => setShareLink("")}
             className="p-1.5 rounded-lg hover:bg-[color:var(--bg-3)] text-[color:var(--ink-3)]"
+            data-testid="share-close"
           >
             <X size={14} />
           </button>
@@ -471,7 +494,8 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
     try { const { data } = await api.get("/ai/sessions"); setSessions(data); }
-    catch {} finally { setLoadingSessions(false); }
+    catch (e) { console.warn("AI sessions load failed:", e?.message); }
+    finally { setLoadingSessions(false); }
   }, []);
   useEffect(() => { if (tab === "history") loadSessions(); }, [tab, loadSessions]);
 
@@ -536,7 +560,10 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
                 return copy;
               });
             }
-          } catch {}
+          } catch (e) {
+            // Skip malformed SSE chunks (partial packets across chunk boundaries)
+            console.warn("Skipping malformed SSE chunk:", e?.message);
+          }
         }
       }
     } catch {

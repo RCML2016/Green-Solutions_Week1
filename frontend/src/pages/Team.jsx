@@ -120,7 +120,16 @@ export default function Team() {
               <div className="flex items-center justify-between mt-2 gap-2">
                 <code className="text-sm text-[color:var(--ink)] break-all">{lastInvite.temporary_password}</code>
                 <button type="button"
-                  onClick={() => { navigator.clipboard.writeText(lastInvite.temporary_password); toast.success("Copied"); }}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(lastInvite.temporary_password);
+                      toast.success("Copied");
+                    } catch (e) {
+                      console.warn("Clipboard write failed:", e?.message);
+                      toast.error("Copy failed — select the password manually");
+                    }
+                  }}
+                  data-testid="copy-temp-password"
                   className="p-1.5 rounded-lg hover:bg-white/60 text-[color:var(--ink-2)]"
                 >
                   <Copy size={14} />

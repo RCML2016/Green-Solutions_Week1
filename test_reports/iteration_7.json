@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 7 regression pass after code-review fixes (empty catch blocks -> console.warn, AuthContext/ThemeContext useMemo). Backend: 66/66 pytest tests pass (43 existing + 23 new in tests/test_iteration7.py covering portfolios CRUD/isolation, alerts push/filter/ack, branding roundtrip, snapshot create + public read + 404, change-password happy/error paths, metrics polling variance, auth negatives). Frontend: Playwright verified landing (sidebar+topbar+hero, zero console output), login -> /dashboard, KPI 5s polling (77% -> 77.7% within 6.5s), onboarding tour walkthrough + LS flag, portfolio selector shows seeded 'Main Renewable Fleet', theme toggle light<->dark persisted via localStorage['gs_theme'] across reload, findings filters (search empty-state, severity chip 4->2, min-conf 97 -> 1), AI SSE streaming (assistant bubble filled <15s), AI History (16 sessions, open works), Alert Center (chips/range/search/acknowledge), Reports (Save Schedule + Save Branding both succeed and persist across reload), Change-password modal (wrong-current error + success toast, reverted), PDF export download (qa-regression-co-report-2026-08-26.pdf with branding applied), Share snapshot + /s/:token renders read-only page with gs_token removed, invalid token -> 'Snapshot not found or expired'. Happy path produced ZERO console errors and ZERO console.warns; new warns fire only when their catch branch executes (verified: garbage gs_token -> 'Auth bootstrap failed, clearing token: Invalid token' + redirect to /login + token cleared).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/login", "issue": "No brute-force lockout/rate limit: 6 consecutive wrong-password attempts are accepted and the 7th correct attempt succeeds. Acceptable for demo, but flagged per auth playbook."},
+      {"endpoint": "CORS middleware", "issue": "allow_origins is hardcoded to ['*'] while backend/.env defines an unused CORS_ORIGINS key. Should read origins from env (allow_credentials is False, so no immediate security break)."},
+      {"endpoint": "GET /api/public/snapshots/{token}", "issue": "Expiry is enforced only by the Mongo TTL index (expires_at, expireAfterSeconds=0); the handler itself does not compare expires_at, so a snapshot can stay readable for up to ~60s past expiry (TTL sweep interval). Cosmetic."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Dashboard.jsx:311 (share-copy) and Team.jsx:123 (copy temp password)", "issue": "Unguarded navigator.clipboard.writeText(): when clipboard permission is denied (headless/Firefox/Safari/iframe) the promise rejects unhandled -> 'NotAllowedError: Failed to execute writeText on Clipboard' uncaught runtime error (CRA red overlay in dev), AND toast.success('Copied') still fires even though nothing was copied. Dashboard.jsx:70 already wraps the same call in try/catch - apply the same pattern to both remaining call sites.", "selector": "[data-testid=\"share-copy\"]", "priority": "MEDIUM"},
+      {"component": "Dashboard share-link card close button (Dashboard.jsx:317)", "issue": "Close (X) button for the share-link card has no data-testid.", "selector": "n/a", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/dashboard, /alerts, /reports, landing (light + dark)", "issues": ["No contrast/spacing/alignment problems found; dark theme renders correctly and persists", "OnboardingTour backdrop (z-50, fixed inset-0) blocks ALL interaction until Skip/Finish - correct product behaviour, but it appears 900ms after mount so automated tests must set localStorage['gs_tour_completed_v1']='1' or dismiss it first"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Wrap navigator.clipboard.writeText in try/catch (Dashboard.jsx:311, Team.jsx:123) and only show the 'Copied' toast on success; show a fallback/select-text hint on failure",
+    "Add data-testid to the share-link card close button",
+    "Optional: read CORS origins from CORS_ORIGINS env var instead of hardcoded ['*']"
+  ],
+  "critical_code_review_comments": [
+    "The reviewed change set is correct: all 5 Dashboard catches, Reports schedule/branding catch, ThemeContext LS catch, OnboardingTour LS catches and AuthContext bootstrap catch now log without user-facing side effects; happy-path runs produced zero warns and the bootstrap warn fires exactly once per mount cycle (twice in dev due to React StrictMode double-invoke - harmless).",
+    "useMemo on AuthContext/ThemeContext values is behaviour-neutral; login/register/logout are recreated each render but are not in the memo deps, which is fine because they only close over stable setState refs.",
+    "Remaining unhandled-promise pattern of the same family: two bare navigator.clipboard.writeText() calls (see ui_bugs) - same class of defect this iteration set out to remove."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration7.py"],
+  "success_rate": {"backend": "100% (66/66)", "frontend": "93% (13/14 flows clean; share-copy clipboard rejection)"},
+  "seed_data_creation": "Temporary test data created and cleaned up: TEST_ portfolios (deleted via API), TESTALRT* alerts (deleted from DB), test_qa_user_* registrations (deleted), branding company/cover_note reset to empty, report-schedule recipients test_qa_ui@example.com and qa_reg@example.com removed. Admin password changed and reverted to Admin@123 (verified login works).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@greensolutions.ai / Admin@123 (verified working after change-password revert)",
+  "context_for_next_testing_agent": "Set localStorage['gs_tour_completed_v1']='1' on the login page BEFORE logging in, otherwise the OnboardingTour backdrop intercepts every click on /dashboard. Login selectors are [data-testid=login-email|login-password|login-submit] (no button[type=submit]). Backend suites: tests/backend_test.py, tests/test_iteration3.py, tests/test_iteration7.py - all pass; run with `cd /app/backend && python -m pytest tests/ -q`. Note that clearing gs_token in a second tab affects the whole origin and makes the first tab's metrics poll log the expected 'Metrics poll failed ... 401' warn.",
+  "rca_of_the_issue": "Clipboard bug RCA: navigator.clipboard.writeText() returns a promise that rejects with NotAllowedError when the document lacks clipboard-write permission (headless Chromium, non-focused document, cross-origin iframe). Dashboard.jsx:311 and Team.jsx:123 call it fire-and-forget inside onClick and immediately call toast.success('Copied'), so (a) the rejection surfaces as an uncaught runtime error and (b) the user gets a false success message. Reproduce: log in, click Share, then click the copy icon in the share-link card with clipboard permission denied."
+}
