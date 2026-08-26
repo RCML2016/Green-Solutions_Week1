@@ -104,6 +104,8 @@ export default function Login() {
             <div>assetmgr@greensolutions.ai · Asset@123</div>
             <div>ops@greensolutions.ai · Ops@123</div>
             <div>tech@greensolutions.ai · Tech@123</div>
+            <div>perf@greensolutions.ai · Perf@123</div>
+            <div>client@greensolutions.ai · Client@123</div>
           </div>
 
           <div className="mt-6 text-sm text-[color:var(--ink-2)] flex justify-between">

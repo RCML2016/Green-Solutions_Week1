@@ -1,0 +1,57 @@
+{
+  "summary": "Iteration 13 (Performance Engineer role, Client Viewer portal, Workspace Switcher, Field Mobile /my-work + evidence upload) tested end-to-end. Backend: created /app/backend/tests/test_iteration13.py (36 tests) covering the 2 new demo logins + /auth/me role, register with all 6 roles (+invalid 422, missing defaults executive), /rbac/my-roles, /rbac/switch (403 on unheld role, multi-role switch flow with fresh JWT), PATCH /team/users/{id}/roles (422 invalid, 403 non-admin, 404 unknown), client-scope GET/PATCH (+404), /client/scope (client=20 sites unrestricted=False, non-client unrestricted=True), /client/portfolio (20 Utility-Scale Solar tiles w/ PR%+availability%, scope_empty=true when cleared, custom 2-site scope), and evidence upload to Emergent Object Storage (POST 200 with storage_path prefix green-solutions/evidence/, GET list scoped to own uploads, GET /{id}/file via ?auth= and Bearer header, 401 no token, 403 other user, 404 missing, 415 non-image, 401/403 unauthenticated upload). Full regression suite: 233 passed / 1 failed (the 1 failure is the deliberate admin-lockout root-cause assertion). Frontend: verified /performance (4 KPIs, 15-row worst-PR benchmarking table, root-cause pareto, DQ tiles, 9 category chips that re-fetch and change KPIs), /client-portal (20 tiles + 4 read-only KPIs + sidebar showing only Client Portal, plus onboarding empty state after scope cleared), WorkspaceSwitcher (hidden for single-role perf user; visible for multi-role tech user, /api/rbac/switch 200, badge + landing update, switch back works), mobile 390x844 /my-work (0px horizontal overflow, diagnose sheet, checklist counter 0/4->2/4, capture=environment on file input, evidence POST 200 + thumbnail rendered, Mark Resolved removes card 8->7 and closes sheet), and /admin (7-option primary role select, 5 extra-role toggle chips, EDIT SITES only on client_viewer rows, scope modal with 100 site checkboxes/8 category chips/search, PATCH client-scope on save + 'Scope saved' toast). Cross-role blocking still enforced (perf blocked from /admin,/client-portal,/operations -> /performance; client blocked from /dashboard,/alerts,/admin,/my-work -> /client-portal).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/rbac/switch", "issue": "ADMIN SELF-LOCKOUT: the seeded admin document has no `roles` array (server.py seeds only `role: admin`, and the roles backfill loop only covers the 6 demo accounts). switch_workspace() writes `role` = target and effective roles are derived from `roles` + `role`, so the moment the admin switches to any other workspace, 'admin' disappears from effective roles and switching back returns 403 — the super-admin is permanently demoted (reproduced live: admin@greensolutions.ai became om_manager and could only be restored by a direct Mongo write; restart does NOT repair it). Fix: (a) seed/backfill roles=['admin'] for the admin account, and (b) in /rbac/switch persist the original role into `roles` before overwriting it.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/evidence, GET /api/evidence/{id}/file", "issue": "storage.put_object/get_object use blocking `requests` calls inside async FastAPI handlers (up to 120s timeout) — this blocks the event loop for the whole worker during uploads. Wrap in run_in_threadpool / use httpx.AsyncClient."},
+      {"endpoint": "GET /api/client/portfolio", "issue": "Loads every fleet_performance doc for the scope (find(...).sort('date',-1) with no limit) just to pick the latest per site; should use an aggregation with $group/$first. Also hard-caps sites at 200 silently, so a client scoped to >200 sites gets truncated KPIs with no indication."},
+      {"endpoint": "POST /api/evidence", "issue": "Content-type sniffing only — a renamed .png with arbitrary bytes is accepted (no magic-byte validation). Acceptable for MVP, worth noting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Administration.jsx", "issue": "BLOCKER (fixed by me): `const [scopeUser, setScopeUser] = useState(null)` was declared AFTER the `if (user && user.role !== 'admin') return <Navigate/>` early return, so CRA/eslint react-hooks/rules-of-hooks failed the build and the whole SPA rendered only the 'Compiled with problems' overlay — every page was unusable. Moved the hook above the early return.", "selector": "[data-testid=\"admin-page\"]", "priority": "CRITICAL"},
+      {"component": "WorkspaceSwitcher / Sidebar", "issue": "On mobile (390x844) the switcher is in the DOM but not visible (desktop sidebar is hidden); a multi-role field technician therefore has no visible way to change workspace on a phone, which is the primary device for the new mobile My Work view.", "selector": "[data-testid=\"workspace-switcher-btn\"]", "priority": "MEDIUM"},
+      {"component": "PerformanceAnalytics root-cause pareto", "issue": "Spec expected 10 bars; only 5 render because the seeded alarm dataset has just 5 distinct root causes (code correctly slices to 10). Not a code defect — spec/data expectation mismatch.", "selector": "[data-testid^=\"perf-rc-\"]", "priority": "LOW"},
+      {"component": "ClientPortal empty state", "issue": "The empty/onboarding branch renders data-testid=client-portal-empty but drops data-testid=client-portal-page, so any test/monitor waiting on the page testid times out. Consider keeping the page testid on both branches.", "selector": "[data-testid=\"client-portal-page\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/performance", "issues": ["Site benchmarking card body scrolls inside a fixed-height card while the Root Cause Pareto card next to it has a large empty area below 5 bars — the two-column heights are visibly unbalanced on 1920px."]},
+      {"screen": "/client-portal", "issues": ["Tiles show PR% values above 100 (e.g. S00002 = 101.0) which reads as a data-quality error to an external client; consider clamping/flagging >100% PR in the read-only client view."]},
+      {"screen": "/admin user table", "issues": ["PRIMARY ROLE still uses a native <select> (browser default styling) instead of the shadcn Select used elsewhere — carried over from iteration 12."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13.py",
+    "/app/backend/tests/test_iteration12.py",
+    "/app/test_reports/pytest/pytest_results_i13.xml"
+  ],
+  "action_items": [
+    "CRITICAL: fix admin self-lockout — backfill roles=['admin'] on the seeded admin in server.py startup AND make /rbac/switch push the current `role` into `roles` before switching (currently one admin workspace switch permanently destroys admin access).",
+    "Move storage.put_object/get_object off the event loop (run_in_threadpool or httpx async) so evidence uploads don't block the backend.",
+    "Optimise /api/client/portfolio latest-perf lookup with an aggregation and surface the 200-site cap.",
+    "Expose the WorkspaceSwitcher in the mobile nav (hamburger drawer / top bar) for multi-role users.",
+    "Optional: keep data-testid=client-portal-page on the empty-state branch; clamp PR% > 100 in client tiles."
+  ],
+  "critical_code_review_comments": [
+    "Administration.jsx had a conditional useState after an early return — a build-breaking rules-of-hooks violation that took the entire frontend down; add a lint gate before handoff.",
+    "/rbac/switch mutates the persisted primary `role` without preserving the previous role in `roles`; this is lossy and is the root cause of the admin lockout.",
+    "server.py startup seeds `roles` for demo accounts only; the admin account is left without a roles array — inconsistent user schema.",
+    "rbac_ext.py fetch_evidence re-implements auth manually (jwt.decode + users.find_one) instead of reusing get_current_user with an optional-token dependency; duplicated auth logic risks drift (e.g. no token-type/expiry-type check on `type: access`)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration13.py",
+    "/app/backend/tests/test_iteration12.py",
+    "/app/frontend/src/pages/Administration.jsx"
+  ],
+  "success_rate": {"backend": "97% (233/234 - single failure is the admin-lockout root-cause assertion)", "frontend": "95% (all iteration-13 flows pass after fixing the build-breaking hook order; mobile workspace switcher not reachable)"},
+  "seed_data_creation": "Registered ~10 test_qa_i13_* users (all deleted afterwards), toggled tech@ roles to [technician, performance_engineer] and executive@ extra role for switcher/admin UI tests (both restored to single role), temporarily cleared and restored client@ scope to its default 20 Utility-Scale Solar sites. 1-2 evidence records uploaded by tech@ remain in db.evidence from the UI upload test.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "/app/memory/test_credentials.md is accurate — all 7 demo accounts verified logging in, including perf@greensolutions.ai/Perf@123 and client@greensolutions.ai/Client@123. bcrypt hash format verified $2b$.",
+  "context_for_next_testing_agent": "Full suite: `cd /app/backend && python -m pytest tests/ -q` => 233 passed, 1 failed (test_iteration13.py::TestWorkspaceSwitch::test_seeded_admin_has_roles_array — intentional bug repro for the admin-lockout; it will pass once the admin doc gets roles=['admin']). DO NOT call POST /api/rbac/switch with the real admin@greensolutions.ai token — it permanently demotes the admin (recover with: db.users.update_one({email:'admin@greensolutions.ai'},{$set:{role:'admin'}})). test_iteration13.py instead uses a throwaway admin-role user. iteration_12 test_landing_map_no_auth was updated to a subset assertion because mvp_roles now has 7 entries. Login must use [data-testid=login-submit] (the button is not type=submit). On mobile the sidebar (and therefore the workspace switcher) is hidden — test the switcher at 1920x1080.",
+  "rca_of_the_issue": "Two root causes found. (1) Frontend total outage: Administration.jsx declared useState after a conditional early return; CRA's eslint react-hooks/rules-of-hooks is an ERROR in this setup, so webpack served the error overlay for every route. Fixed by hoisting the hook. (2) Admin lockout: _effective_roles(user) = set(user.roles) | {user.role}; switch_workspace overwrites user.role but never appends the old role to user.roles. The seeded admin has no roles array (server.py only backfills roles for the 6 demo accounts), so after one switch its effective role set no longer contains 'admin' and the 403 guard blocks switching back; restart does not repair it because seed only touches password_hash for existing admins."
+}

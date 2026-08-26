@@ -13,7 +13,15 @@ Any legacy `user` role is auto-migrated to `executive` on startup.
 from fastapi import Depends, HTTPException
 from deps import get_current_user
 
-MVP_ROLES = ("executive", "asset_manager", "om_manager", "technician", "admin")
+MVP_ROLES = (
+    "executive",
+    "asset_manager",
+    "om_manager",
+    "technician",
+    "performance_engineer",
+    "client_viewer",
+    "admin",
+)
 LEGACY_ROLES = ("user", "owner", "compliance")  # accepted but not offered on register
 ALL_ROLES = MVP_ROLES + LEGACY_ROLES
 
@@ -23,6 +31,8 @@ ROLE_LANDING = {
     "asset_manager": "/dashboard",
     "om_manager": "/operations",
     "technician": "/my-work",
+    "performance_engineer": "/performance",
+    "client_viewer": "/client-portal",
     "admin": "/admin",
     # Legacy fallbacks
     "user": "/overview",

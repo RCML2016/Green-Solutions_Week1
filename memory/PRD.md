@@ -51,52 +51,65 @@
 5. Dashboard powered by real seeded dataset (no random jitter).
 6. Site Detail drill-down at `/site/:site_id`.
 
-## What's been implemented (Feb 2026, iteration 12)
+## What's been implemented (Feb 2026, iteration 14)
 
-### Backend (routers + fleet APIs + RBAC)
-- Refactored monolithic `server.py` (890 lines) into thin entry + 4 routers.
+### Backend (routers + fleet APIs + RBAC + storage)
+- Refactored monolithic `server.py` (890 lines) into thin entry + 5 routers.
 - Idempotent XLSX → Mongo seed on startup (7 collections, ~76k documents).
-- 9 new `/api/fleet/*` endpoints (categories, kpis, sites, telemetry sliding window,
+- 9 `/api/fleet/*` endpoints (categories, kpis, sites, telemetry sliding window,
   alarms, work orders, states, performance trend, site detail).
-- **RBAC (iteration 12)** — 5 MVP roles: `admin`, `executive`, `asset_manager`,
-  `om_manager`, `technician` (legacy `user` auto-migrated to `executive` at startup).
-  `rbac.role_required(...)` guards on `/alerts`, `/actions`, `/team/*`. Admin is a
-  super-role. New endpoints: `GET /api/rbac/landing` (public map), `PATCH
-  /api/team/users/{id}/role` (admin only). 4 demo accounts seeded on startup + junk
-  test accounts auto-purged.
+- **RBAC (iterations 12-14)** — 7 MVP roles: `admin`, `executive`, `asset_manager`,
+  `om_manager`, `technician`, `performance_engineer`, `client_viewer` (legacy `user`
+  auto-migrated to `executive` at startup). `rbac.role_required(...)` guards on
+  `/alerts`, `/actions`, `/team/*`. Admin is a super-role with self-lockout protection
+  (roles=['admin'] backfill; switch preserves prior role in roles array).
+- **Multi-role workspaces** — users can hold N roles; `POST /api/rbac/switch` sets
+  active role and returns a fresh JWT. Reversible.
+- **Client viewer scope** — admin scopes a client_viewer to a list of `site_ids` +
+  `categories` via `PATCH /api/team/users/{id}/client-scope`. `GET /api/client/portfolio`
+  returns a read-only KPI + tile view restricted to that scope.
+- **Evidence upload** — `POST /api/evidence` multipart uploads photos to Emergent Object
+  Storage, streamed back via `GET /api/evidence/{id}/file?auth=<token>`. Non-admins only
+  see their own uploads. All storage I/O runs in threadpool so uploads don't block.
+- 7 demo accounts seeded on startup (one per MVP role).
 
 ### Frontend
-- `Dashboard.jsx` rewritten as slim orchestrator; extracted `CategorySwitcher`,
-  `FleetKpiCards`, `SitesTable`, `AlarmsFeed`, `WorkOrdersCard`, `AiInsightPanel`.
-- `SiteDetail.jsx` drill-down page (assets, telemetry chart, alarms, WOs).
+- Slim `Dashboard.jsx` orchestrator; extracted dashboard components.
+- `SiteDetail.jsx` drill-down (assets, telemetry chart, alarms, WOs).
 - Theme reverted to origin palette (bright white + emerald green).
-- **Role-based navigation (iteration 12)** — `/app/frontend/src/lib/roles.js` defines
-  `NAV`, `LANDING`, `visibleItems()`, `landingFor()`. Sidebar is role-scoped. Login
-  redirects to the role's default landing. Register form has a role picker.
-- 4 new role-specific landing pages: `ExecutiveOverview`, `OperationsCenter`, `MyWork`,
-  `Administration`. Each is role-guarded via `<Protected allow={[...]}>`; unauthorized
-  users are redirected to their own landing.
+- **Role-based navigation** — `/app/frontend/src/lib/roles.js` (`NAV`, `LANDING`).
+  Sidebar & TopBar are role-scoped. Login redirects to the role's landing.
+- 6 role-specific pages: `ExecutiveOverview`, `OperationsCenter`, `MyWork`,
+  `Administration`, `PerformanceAnalytics`, `ClientPortal`.
+- **WorkspaceSwitcher** — dropdown in Sidebar (desktop) + in Profile menu (mobile,
+  accessible via TopBar). Only renders when user has >1 role.
+- **Mobile-first `MyWork`** — 390px viewport optimised. Alarm cards → bottom-sheet
+  `DiagnoseSheet` with a 4-step checklist + inline camera evidence upload + Mark Resolved.
+  Photos are streamed back into thumbnails via blob URLs.
+- Register form supports all 6 MVP roles (admin cannot self-register).
+- Administration page — inline PRIMARY ROLE dropdown, EXTRA ROLES toggle chips (multi-
+  role editing), and a **Client Scope modal** (categories + site checklist) for any user
+  holding the `client_viewer` role.
 
 ### Testing
-- **Backend: 198/198 pytest passing** (iteration 12; +43 RBAC tests on top of the 155
-  iteration-11 tests).
-- **Frontend: 100% of Playwright RBAC/nav flows** — every role login lands on the
-  correct page, role-scoped sidebars verified, cross-role blocking verified for all 5
-  roles.
+- **Backend: 245/245 pytest passing** (iteration 14; +90 tests over iteration 12).
+- **Frontend: 100% of Playwright RBAC / navigation / mobile / evidence flows**.
 
 ## Prioritized Backlog
 
-### P1 — Next roles + workspace switcher
-- Add remaining 6 roles: Performance Engineer, Sustainability Manager, Financial
-  User, Compliance Manager, AI Analyst, Client Viewer.
-- Multi-role workspaces + workspace switcher UI.
-- Per-field data masking (e.g. Technician can't see revenue).
+### P1 — Remaining roles + finish scope
+- Add remaining 4 roles from the user's original list: Sustainability Manager,
+  Financial User, Compliance Manager, AI Analyst.
+- Per-field data masking (Technician can't see revenue).
+- Client scope hard-cap indicator (currently silently caps at 200 sites).
 
 ### P2 (nice-to-have)
-- Replace native `<select>` role picker on `/admin` with shadcn Select for design
-  consistency.
-- Make the telemetry sliding window visibly rotate at `hours=24`.
-- Clamp/annotate PR% > 100% in SitesTable/SiteDetail.
+- Magic-byte validation on evidence uploads (currently content-type/extension only).
+- Reuse `get_current_user` on `/evidence/{id}/file` via optional-token dependency
+  instead of hand-rolled `jwt.decode`.
+- Trim marketing PLATFORM/COMPANY sections from Client Viewer sidebar for a
+  cleaner "walled garden" view.
+- Backdrop scrim behind mobile profile dropdown.
 - Move alarm severity + asset-status badge colors to theme tokens.
 - Scalability: replace `find().to_list(2000) → $in` patterns with `$lookup`/`$facet`.
 

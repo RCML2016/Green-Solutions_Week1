@@ -25,6 +25,8 @@ import ExecutiveOverview from "@/pages/ExecutiveOverview";
 import OperationsCenter from "@/pages/OperationsCenter";
 import MyWork from "@/pages/MyWork";
 import Administration from "@/pages/Administration";
+import PerformanceAnalytics from "@/pages/PerformanceAnalytics";
+import ClientPortal from "@/pages/ClientPortal";
 import { landingFor } from "@/lib/roles";
 
 function Protected({ children, allow }) {
@@ -64,7 +66,7 @@ function App() {
               <Protected allow={["executive", "asset_manager", "om_manager"]}><ExecutiveOverview /></Protected>
             } />
             <Route path="/dashboard" element={
-              <Protected allow={["executive", "asset_manager", "om_manager"]}><Dashboard /></Protected>
+              <Protected allow={["executive", "asset_manager", "om_manager", "performance_engineer"]}><Dashboard /></Protected>
             } />
             <Route path="/operations" element={
               <Protected allow={["om_manager", "asset_manager"]}><OperationsCenter /></Protected>
@@ -74,6 +76,12 @@ function App() {
             } />
             <Route path="/admin" element={
               <Protected allow={["admin"]}><Administration /></Protected>
+            } />
+            <Route path="/performance" element={
+              <Protected allow={["performance_engineer", "asset_manager"]}><PerformanceAnalytics /></Protected>
+            } />
+            <Route path="/client-portal" element={
+              <Protected allow={["client_viewer"]}><ClientPortal /></Protected>
             } />
 
             <Route path="/reports" element={

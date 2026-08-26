@@ -9,7 +9,7 @@ class RegisterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     role: Optional[str] = Field(
         default="executive",
-        pattern="^(executive|asset_manager|om_manager|technician)$",
+        pattern="^(executive|asset_manager|om_manager|technician|performance_engineer|client_viewer)$",
     )
 
 
@@ -52,11 +52,33 @@ class SessionCreateRequest(BaseModel):
 class InviteRequest(BaseModel):
     email: EmailStr
     name: str = Field(min_length=1, max_length=80)
-    role: str = Field(pattern="^(executive|asset_manager|om_manager|technician|admin|owner|compliance)$")
+    role: str = Field(pattern="^(executive|asset_manager|om_manager|technician|performance_engineer|client_viewer|admin|owner|compliance)$")
 
 
 class RoleUpdateRequest(BaseModel):
-    role: str = Field(pattern="^(executive|asset_manager|om_manager|technician|admin)$")
+    role: str = Field(pattern="^(executive|asset_manager|om_manager|technician|performance_engineer|client_viewer|admin)$")
+
+
+class RolesUpdateRequest(BaseModel):
+    """Multi-role assignment: admin sets N roles for a user."""
+    roles: List[str] = Field(min_length=1, max_length=7)
+
+
+class WorkspaceSwitchRequest(BaseModel):
+    role: str = Field(pattern="^(executive|asset_manager|om_manager|technician|performance_engineer|client_viewer|admin)$")
+
+
+class ClientScopeRequest(BaseModel):
+    """Admin sets which sites a client_viewer can see."""
+    allowed_site_ids: List[str] = Field(default_factory=list, max_length=500)
+    allowed_categories: List[str] = Field(default_factory=list, max_length=20)
+
+
+class EvidenceMeta(BaseModel):
+    site_id: Optional[str] = Field(default=None, max_length=20)
+    alarm_id: Optional[str] = Field(default=None, max_length=20)
+    work_order_id: Optional[str] = Field(default=None, max_length=20)
+    note: Optional[str] = Field(default="", max_length=500)
 
 
 class ScheduleRequest(BaseModel):

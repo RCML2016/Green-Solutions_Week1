@@ -44,7 +44,9 @@ class TestRbacLanding:
         assert d["landing"]["om_manager"] == "/operations"
         assert d["landing"]["technician"] == "/my-work"
         assert d["landing"]["admin"] == "/admin"
-        assert set(d["mvp_roles"]) == {"executive", "asset_manager", "om_manager", "technician", "admin"}
+        # iteration 13 added performance_engineer + client_viewer
+        assert {"executive", "asset_manager", "om_manager", "technician", "admin"} <= set(d["mvp_roles"])
+        assert {"performance_engineer", "client_viewer"} <= set(d["mvp_roles"])
 
 
 # ---------------- register with role ----------------

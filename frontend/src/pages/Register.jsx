@@ -2,14 +2,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { ArrowLeft, Briefcase, Activity, Wrench, ClipboardList } from "lucide-react";
+import { ArrowLeft, Briefcase, Activity, Wrench, ClipboardList, LineChart, Eye } from "lucide-react";
 import { landingFor } from "@/lib/roles";
 
 const ROLE_OPTIONS = [
-  { value: "executive",     label: "Executive",     icon: Briefcase,      desc: "Portfolio KPIs, revenue, ESG" },
-  { value: "asset_manager", label: "Asset Manager", icon: Activity,       desc: "Full fleet operations" },
-  { value: "om_manager",    label: "O&M Manager",   icon: Wrench,         desc: "Alarms, work orders, teams" },
-  { value: "technician",    label: "Technician",    icon: ClipboardList,  desc: "Assigned work, troubleshooting" },
+  { value: "executive",            label: "Executive",       icon: Briefcase,      desc: "Portfolio KPIs, revenue, ESG" },
+  { value: "asset_manager",        label: "Asset Manager",   icon: Activity,       desc: "Full fleet operations" },
+  { value: "om_manager",           label: "O&M Manager",     icon: Wrench,         desc: "Alarms, work orders, teams" },
+  { value: "technician",           label: "Technician",      icon: ClipboardList,  desc: "Assigned work, troubleshooting" },
+  { value: "performance_engineer", label: "Perf. Engineer",  icon: LineChart,      desc: "Loss analysis & benchmarks" },
+  { value: "client_viewer",        label: "Client Viewer",   icon: Eye,            desc: "Read-only approved sites" },
 ];
 
 export default function Register() {

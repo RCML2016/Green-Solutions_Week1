@@ -2,6 +2,7 @@ import { NavLink, Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { NAV, visibleItems, ROLES } from "@/lib/roles";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 
 export default function Sidebar() {
   const { user } = useAuth();
@@ -40,6 +41,8 @@ export default function Sidebar() {
           </div>
         </div>
       )}
+
+      <WorkspaceSwitcher />
 
       <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-6">
         {NAV.map((section) => {

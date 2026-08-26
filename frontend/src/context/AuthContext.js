@@ -40,6 +40,20 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const switchWorkspace = async (role) => {
+    try {
+      const { data } = await api.post("/rbac/switch", { role });
+      // Server issued a fresh token that reflects the new active_role
+      if (data.access_token) localStorage.setItem("gs_token", data.access_token);
+      // Re-fetch user (role field changed)
+      const me = await api.get("/auth/me");
+      setUser(me.data);
+      return { ok: true, user: me.data };
+    } catch (e) {
+      return { ok: false, error: formatApiError(e) };
+    }
+  };
+
   const register = async (name, email, password, role = "executive") => {
     try {
       const { data } = await api.post("/auth/register", { name, email, password, role });
@@ -57,7 +71,7 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
+    () => ({ user, loading, login, register, logout, switchWorkspace }),
     [user, loading]
   );
 

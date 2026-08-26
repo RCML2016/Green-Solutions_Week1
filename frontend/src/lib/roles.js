@@ -10,14 +10,17 @@
 import {
   Home, LayoutDashboard, Bell, Wrench, ClipboardList, Users, MessageSquare,
   Layers, Cpu, Workflow, Mail, UserPlus, ShieldCheck, Briefcase, Activity,
+  LineChart, Eye,
 } from "lucide-react";
 
 export const ROLES = {
-  executive:     { label: "Executive",       icon: Briefcase },
-  asset_manager: { label: "Asset Manager",   icon: Activity },
-  om_manager:    { label: "O&M Manager",     icon: Wrench },
-  technician:    { label: "Field Technician", icon: Wrench },
-  admin:         { label: "Administrator",   icon: ShieldCheck },
+  executive:            { label: "Executive",            icon: Briefcase },
+  asset_manager:        { label: "Asset Manager",        icon: Activity },
+  om_manager:           { label: "O&M Manager",          icon: Wrench },
+  technician:           { label: "Field Technician",     icon: Wrench },
+  performance_engineer: { label: "Performance Engineer", icon: LineChart },
+  client_viewer:        { label: "Client Viewer",        icon: Eye },
+  admin:                { label: "Administrator",        icon: ShieldCheck },
 };
 
 export const LANDING = {
@@ -25,6 +28,8 @@ export const LANDING = {
   asset_manager: "/dashboard",
   om_manager: "/operations",
   technician: "/my-work",
+  performance_engineer: "/performance",
+  client_viewer: "/client-portal",
   admin: "/admin",
   // legacy fallbacks
   user: "/overview",
@@ -45,26 +50,30 @@ export const NAV = [
   // OPERATIONS — role-gated
   { section: "OPERATIONS", items: [
     // MONITOR
-    { to: "/overview",   label: "Executive Overview", icon: Briefcase,
-      allow: ["executive", "asset_manager", "om_manager", "admin"] },
-    { to: "/dashboard",  label: "Live Dashboard",     icon: LayoutDashboard,
-      allow: ["executive", "asset_manager", "om_manager", "admin"] },
-    { to: "/operations", label: "Operations Center",  icon: Activity,
-      allow: ["om_manager", "asset_manager", "admin"] },
-    { to: "/my-work",    label: "My Work",            icon: ClipboardList,
-      allow: ["technician", "om_manager", "admin"] },
+    { to: "/overview",       label: "Executive Overview",   icon: Briefcase,
+      allow: ["executive", "asset_manager", "om_manager"] },
+    { to: "/dashboard",      label: "Live Dashboard",       icon: LayoutDashboard,
+      allow: ["executive", "asset_manager", "om_manager", "performance_engineer"] },
+    { to: "/operations",     label: "Operations Center",    icon: Activity,
+      allow: ["om_manager", "asset_manager"] },
+    { to: "/my-work",        label: "My Work",              icon: ClipboardList,
+      allow: ["technician", "om_manager"] },
+    { to: "/performance",    label: "Performance Analytics", icon: LineChart,
+      allow: ["performance_engineer", "asset_manager"] },
+    { to: "/client-portal",  label: "Client Portal",        icon: Eye,
+      allow: ["client_viewer"] },
 
     // DIAGNOSE
     { to: "/alerts",  label: "Alert Center", icon: Bell,
-      allow: ["asset_manager", "om_manager", "technician", "admin"] },
+      allow: ["asset_manager", "om_manager", "technician", "performance_engineer"] },
 
     // OPTIMIZE
     { to: "/reports", label: "Report Scheduler", icon: Mail,
-      allow: ["executive", "asset_manager", "om_manager", "admin"] },
+      allow: ["executive", "asset_manager", "om_manager"] },
     { to: "/team",    label: "Team",              icon: UserPlus,
-      allow: ["admin"] },
+      allow: [] },  // admin only via super-role
     { to: "/admin",   label: "Administration",    icon: ShieldCheck,
-      allow: ["admin"] },
+      allow: [] },
   ]},
 
   { section: "COMPANY", public: true, items: [

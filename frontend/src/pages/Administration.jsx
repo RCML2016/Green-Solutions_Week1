@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { ROLES } from "@/lib/roles";
 
-const ROLE_ORDER = ["admin", "asset_manager", "om_manager", "technician", "executive"];
+const ROLE_ORDER = ["admin", "asset_manager", "om_manager", "technician", "executive", "performance_engineer", "client_viewer"];
+const ALL_MVP_ROLES = ["executive", "asset_manager", "om_manager", "technician", "performance_engineer", "client_viewer", "admin"];
 
 /** Administration hub — user management + system health + quick links. */
 export default function Administration() {
@@ -16,6 +17,7 @@ export default function Administration() {
   const [users, setUsers] = useState([]);
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [scopeUser, setScopeUser] = useState(null); // for client scope editor modal
 
   const load = async () => {
     setLoading(true);
@@ -46,6 +48,21 @@ export default function Administration() {
     try {
       await api.patch(`/team/users/${u.id}/role`, { role: newRole });
       toast.success(`${u.email} → ${newRole}`);
+      await load();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  };
+
+  const toggleExtraRole = async (u, role) => {
+    const current = new Set(u.roles || [u.role]);
+    if (current.has(role)) current.delete(role);
+    else current.add(role);
+    // Keep primary role first
+    const list = [u.role, ...Array.from(current).filter((r) => r !== u.role)];
+    try {
+      await api.patch(`/team/users/${u.id}/roles`, { roles: list });
+      toast.success(`Updated roles for ${u.email}`);
       await load();
     } catch (e) {
       toast.error(formatApiError(e));
@@ -127,7 +144,9 @@ export default function Administration() {
                 <tr className="text-[10px] font-mono text-[color:var(--ink-3)] border-b border-[color:var(--line-2)]">
                   <th className="text-left py-2 px-2">NAME</th>
                   <th className="text-left py-2 px-2">EMAIL</th>
-                  <th className="text-left py-2 px-2">ROLE</th>
+                  <th className="text-left py-2 px-2">PRIMARY ROLE</th>
+                  <th className="text-left py-2 px-2">EXTRA ROLES</th>
+                  <th className="text-left py-2 px-2">SCOPE</th>
                   <th className="text-left py-2 px-2">CREATED</th>
                 </tr>
               </thead>
@@ -145,13 +164,47 @@ export default function Administration() {
                         className="gs-input text-xs"
                         style={{ padding: "4px 8px" }}
                       >
-                        {["executive", "asset_manager", "om_manager", "technician", "admin"].map((r) => (
+                        {ALL_MVP_ROLES.map((r) => (
                           <option key={r} value={r}>{ROLES[r]?.label || r}</option>
                         ))}
-                        {!["executive", "asset_manager", "om_manager", "technician", "admin"].includes(u.role) && (
+                        {!ALL_MVP_ROLES.includes(u.role) && (
                           <option value={u.role}>{u.role} (legacy)</option>
                         )}
                       </select>
+                    </td>
+                    <td className="py-2 px-2">
+                      <div className="flex flex-wrap gap-1" data-testid={`admin-extra-roles-${u.email}`}>
+                        {ALL_MVP_ROLES.filter((r) => r !== u.role && r !== "admin").map((r) => {
+                          const on = (u.roles || []).includes(r);
+                          return (
+                            <button
+                              key={r}
+                              onClick={() => toggleExtraRole(u, r)}
+                              data-testid={`admin-toggle-${u.email}-${r}`}
+                              className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full border transition ${
+                                on
+                                  ? "border-[color:var(--brand)] bg-[color:var(--brand-tint)] text-[color:var(--brand-3)]"
+                                  : "border-[color:var(--line)] text-[color:var(--ink-3)] hover:border-[color:var(--brand)]"
+                              }`}
+                            >
+                              {ROLES[r]?.label?.split(" ")[0] || r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2">
+                      {u.role === "client_viewer" || (u.roles || []).includes("client_viewer") ? (
+                        <button
+                          onClick={() => setScopeUser(u)}
+                          data-testid={`admin-scope-${u.email}`}
+                          className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--brand)] text-[color:var(--brand-3)] bg-[color:var(--brand-tint)] hover:bg-white"
+                        >
+                          EDIT SITES
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-mono text-[color:var(--ink-3)]">—</span>
+                      )}
                     </td>
                     <td className="py-2 px-2 text-[10px] font-mono text-[color:var(--ink-3)]">
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
@@ -178,6 +231,141 @@ export default function Administration() {
           <div className="font-mono text-[10px] text-[color:var(--ink-3)]">FLEET DASHBOARD</div>
           <div className="font-display text-xl text-[color:var(--ink)] mt-2">380 sites · live view →</div>
         </Link>
+      </div>
+
+      {scopeUser && (
+        <ClientScopeModal
+          user={scopeUser}
+          onClose={() => setScopeUser(null)}
+          onSaved={() => { setScopeUser(null); toast.success("Scope saved"); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ClientScopeModal({ user: targetUser, onClose, onSaved }) {
+  const [scope, setScope] = useState({ allowed_site_ids: [], allowed_categories: [] });
+  const [sites, setSites] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      api.get(`/team/users/${targetUser.id}/client-scope`),
+      api.get("/fleet/sites", { params: { limit: 100 } }),
+      api.get("/fleet/categories"),
+    ]).then(([s, sitesResp, catResp]) => {
+      setScope(s.data);
+      setSites(sitesResp.data.items);
+      setCategories(catResp.data);
+    }).catch(() => {});
+  }, [targetUser.id]);
+
+  const toggleSite = (siteId) => {
+    setScope((s) => {
+      const cur = new Set(s.allowed_site_ids);
+      cur.has(siteId) ? cur.delete(siteId) : cur.add(siteId);
+      return { ...s, allowed_site_ids: Array.from(cur) };
+    });
+  };
+  const toggleCat = (cat) => {
+    setScope((s) => {
+      const cur = new Set(s.allowed_categories);
+      cur.has(cat) ? cur.delete(cat) : cur.add(cat);
+      return { ...s, allowed_categories: Array.from(cur) };
+    });
+  };
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.patch(`/team/users/${targetUser.id}/client-scope`, scope);
+      onSaved();
+    } catch (e) { toast.error(formatApiError(e)); }
+    finally { setBusy(false); }
+  };
+
+  const filteredSites = search.trim()
+    ? sites.filter((s) => s.site_id.toLowerCase().includes(search.toLowerCase()) || s.site_name.toLowerCase().includes(search.toLowerCase()))
+    : sites;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-testid="scope-modal">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+        <div className="p-5 border-b border-[color:var(--line-2)] flex items-center justify-between">
+          <div>
+            <div className="font-mono text-[10px] text-[color:var(--ink-3)]">CLIENT SCOPE</div>
+            <div className="text-sm text-[color:var(--ink)]">{targetUser.email}</div>
+          </div>
+          <button onClick={onClose} data-testid="scope-close" className="p-2 rounded-lg hover:bg-[color:var(--bg-3)] text-[color:var(--ink-3)]">
+            ✕
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto flex-1 space-y-5">
+          <div>
+            <div className="font-mono text-[10px] text-[color:var(--ink-3)] mb-2">CATEGORIES (grants all sites of the type)</div>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.filter((c) => c.site_count > 0).map((c) => {
+                const on = scope.allowed_categories.includes(c.category);
+                return (
+                  <button
+                    key={c.category}
+                    onClick={() => toggleCat(c.category)}
+                    data-testid={`scope-cat-${c.priority}`}
+                    className={`text-[11px] font-mono px-2.5 py-1 rounded-full border transition ${on ? "border-[color:var(--brand)] bg-[color:var(--brand-tint)] text-[color:var(--brand-3)]" : "border-[color:var(--line)] text-[color:var(--ink-2)]"}`}
+                  >
+                    {c.category} · {c.site_count}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-mono text-[10px] text-[color:var(--ink-3)]">
+                SITES · {scope.allowed_site_ids.length} approved
+              </div>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                data-testid="scope-search"
+                placeholder="Filter..."
+                className="gs-input text-xs"
+                style={{ padding: "4px 10px", width: 180 }}
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto border border-[color:var(--line-2)] rounded-xl divide-y divide-[color:var(--line-2)]">
+              {filteredSites.map((s) => {
+                const on = scope.allowed_site_ids.includes(s.site_id);
+                return (
+                  <label
+                    key={s.site_id}
+                    className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[color:var(--brand-mint)] ${on ? "bg-[color:var(--brand-tint)]" : ""}`}
+                    data-testid={`scope-site-${s.site_id}`}
+                  >
+                    <input type="checkbox" checked={on} onChange={() => toggleSite(s.site_id)} className="accent-[color:var(--brand)]" />
+                    <span className="font-mono text-[11px] text-[color:var(--brand-3)] w-16">{s.site_id}</span>
+                    <span className="text-xs text-[color:var(--ink)] flex-1 truncate">{s.site_name}</span>
+                    <span className="text-[10px] font-mono text-[color:var(--ink-3)]">{s.site_type}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-[color:var(--line-2)] flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-full border border-[color:var(--line)] py-2.5 text-sm text-[color:var(--ink-2)]">
+            Cancel
+          </button>
+          <button onClick={save} disabled={busy} data-testid="scope-save" className="flex-1 gs-btn-primary justify-center text-sm disabled:opacity-60">
+            {busy ? <Loader2 className="animate-spin" size={14} /> : null}
+            Save Scope
+          </button>
+        </div>
       </div>
     </div>
   );

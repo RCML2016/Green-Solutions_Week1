@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 14 re-test of the 6 fixes from iteration 13. Backend: created /app/backend/tests/test_iteration14.py (11 tests, all pass) covering (a) admin self-lockout fix — /rbac/my-roles for admin returns roles containing 'admin', admin->executive switch returns 200 with roles=['admin','executive'], switch back to 'admin' returns 200 + /auth/me role=admin + /team/users 200 (admin powers intact), non-admin switch to unheld role still 403; (b) /api/client/portfolio $group aggregation — response shape unchanged (sites[] with site_id/site_name/site_type/state/site_capacity_kW/performance_ratio_pct/availability_pct, kpis with all 6 keys), latest-perf populated per tile, 200-site scope returns exactly 200 tiles in ~1s, empty scope returns scope_empty=true; (c) threadpool fix — POST /api/evidence 200 with image/png content_type + storage_path prefix, GET /api/evidence/{id}/file 200 with content-type image/png and PNG magic bytes via both Bearer and ?auth=, and 2 parallel /api/healthz calls during an in-flight 4MB upload both returned 200 in <1s (event loop no longer blocked); (d) RBAC regression (client_viewer 403 on /team/users, perf engineer 403 on POST /actions, /client/scope unrestricted=false). Full regression suite: 245 passed / 0 failed (iteration 13's admin-lockout repro test now passes). Frontend: mobile 390x844 — profile menu ([data-testid=topbar-profile-btn]) reveals [data-testid=profile-workspace-switcher] with profile-workspace-admin + profile-workspace-executive; clicking Executive fired POST /api/rbac/switch and landed on /overview, switching back landed on /admin (reversible on mobile). Single-role tech user correctly sees NO switcher. /client-portal: [data-testid=client-portal-page] present on BOTH populated and cleared-scope empty state (verified by clearing scope via PATCH client-scope and re-login), PR% clamped — S00002 (101.05) and S00012 (101.01) both render '100.0*' while normal sites render un-asterisked values. Regression: perf landing + 37 perf-* elements, perf blocked from /admin -> /performance, client blocked from /dashboard -> /client-portal, mobile /my-work 16 alarm cards with 0px horizontal overflow, no JS page errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/client/portfolio", "issue": "Still silently hard-caps at 200 sites (.limit(200)) with no truncation flag in the response — a client scoped to >200 sites gets partial KPIs with no indication. Aggregation perf fix itself is verified good."},
+      {"endpoint": "POST /api/evidence", "issue": "Carried over from i13: content-type/extension sniffing only, no magic-byte validation (a renamed non-image is accepted)."},
+      {"endpoint": "GET /api/evidence/{id}/file", "issue": "Carried over from i13: hand-rolled jwt.decode auth instead of reusing get_current_user with an optional-token dependency; no token `type` claim check, so a refresh token would be accepted if one exists."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/client-portal", "issues": ["PR>100 now renders '100.0*' but the asterisk has no legend/tooltip anywhere on the page, so an external client has no way to know what it means — add a footnote e.g. '* value capped at 100% (data quality under review)'."]},
+      {"screen": "Mobile profile menu (390x844)", "issues": ["The profile dropdown (w-56, z-30) overlays the page heading and first KPI card with no scrim/backdrop; workable but visually cramped on 390px."]},
+      {"screen": "Client Viewer sidebar", "issues": ["Sidebar still lists the marketing PLATFORM section (Overview/Platform/Solutions/How It Works) plus COMPANY links above the single OPERATIONS -> Client Portal item; for a read-only external client this dilutes the 'nothing else' promise in the empty-state copy. Cosmetic/product decision, not a defect."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14.py",
+    "/app/backend/tests/_i14_scope_toggle.py",
+    "/app/test_reports/pytest/pytest_results_i14.xml"
+  ],
+  "action_items": [
+    "Optional: surface the 200-site cap in /api/client/portfolio (e.g. truncated: true / total_in_scope count).",
+    "Optional: add a legend for the '*' PR marker on client tiles.",
+    "Optional: replace the manual jwt.decode in fetch_evidence with an optional-token dependency reusing get_current_user."
+  ],
+  "critical_code_review_comments": [
+    "All 6 fixes verified in code and at runtime: server.py backfills roles=['admin'] and restores role='admin' for the existing admin doc; rbac_ext.switch_workspace merges prior_role into roles (dict.fromkeys dedup) making switching reversible; portfolio uses $sort+$group/$first for latest perf; storage.put_object/get_object wrapped in run_in_threadpool; TopBar renders the switcher inside the profile menu gated on myRoles.length > 1; ClientPortal keeps client-portal-page on both branches and clamps PR with Math.min(100, pr).",
+    "Side effect to be aware of: /rbac/switch permanently appends the visited role to the user's roles array (admin@greensolutions.ai now permanently holds roles=['admin','executive'] after any preview). This makes 'preview another workspace' indistinguishable from 'grant myself that role', and it makes the switcher permanently visible for admins. Consider tracking active workspace in the JWT/session only, or keeping a separate `preview_role`, instead of mutating persisted roles."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration14.py",
+    "/app/backend/tests/_i14_scope_toggle.py"
+  ],
+  "success_rate": {"backend": "100% (245/245 full suite, 11/11 new iteration-14 tests)", "frontend": "100% (all 6 fix verifications + regression flows pass)"},
+  "seed_data_creation": "Registered 3 throwaway client_viewer users for portfolio scope tests (all deleted). client@greensolutions.ai scope cleared then restored to the default 20 Utility-Scale Solar sites (S00001-S00020) — verified restored. Evidence records created by tech@ during tests deleted from db.evidence (blobs remain in object storage). admin@greensolutions.ai left with role='admin', roles=['admin','executive'].",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "/app/memory/test_credentials.md accurate — admin/perf/client/tech logins all verified.",
+  "context_for_next_testing_agent": "Full suite: `cd /app/backend && python -m pytest tests/ -q` => 245 passed (~4 min; pytest.ini already sets -n/--dist loadscope, do not pass -p no:xdist). It is now SAFE to call POST /api/rbac/switch with the real admin token — the switch preserves the prior role, and admin@greensolutions.ai has roles=['admin','executive'] (so the admin profile menu always shows the workspace switcher). Login must use [data-testid=login-submit]. Mobile workspace switcher lives inside [data-testid=topbar-profile-btn] -> [data-testid=profile-workspace-switcher] -> [data-testid=profile-workspace-<role>]; it only renders when my-roles has >1 role. My Work alarm cards do NOT use a mywork-card-* testid (use text/count instead). Sites with PR>100 in the client scope: S00002, S00012 (render '100.0*'). Use /app/backend/tests/_i14_scope_toggle.py clear|restore to toggle client@ scope for empty-state UI tests.",
+  "rca_of_the_issue": "No new defects. Previous CRITICAL (admin self-lockout) RCA — _effective_roles = roles | {role} while switch overwrote role without preserving it, and the seeded admin had no roles array — is fixed on both sides (startup backfill + switch merge) and confirmed reversible end-to-end via API and mobile UI."
+}

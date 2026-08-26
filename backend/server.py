@@ -20,10 +20,12 @@ from starlette.middleware.cors import CORSMiddleware
 
 from deps import db, close_db_client, hash_password, verify_password
 from seed_dataset import seed_if_empty
+import storage
 from routers.auth import router as auth_router
 from routers.ai import router as ai_router
 from routers.core import router as core_router
 from routers.fleet import router as fleet_router
+from routers.rbac_ext import router as rbac_router, team_router, client_router, evidence_router
 
 
 logging.basicConfig(
@@ -59,6 +61,10 @@ api_router.include_router(auth_router)
 api_router.include_router(ai_router)
 api_router.include_router(core_router)
 api_router.include_router(fleet_router)
+api_router.include_router(rbac_router)
+api_router.include_router(team_router)
+api_router.include_router(client_router)
+api_router.include_router(evidence_router)
 
 app.include_router(api_router)
 
@@ -100,13 +106,21 @@ async def startup():
             "password_hash": hash_password(admin_password),
             "name": "Admin",
             "role": "admin",
+            "roles": ["admin"],
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one(
-            {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_password)}},
-        )
+    else:
+        updates = {}
+        if not verify_password(admin_password, existing["password_hash"]):
+            updates["password_hash"] = hash_password(admin_password)
+        # Ensure admin is always in the roles array so they can never be self-locked
+        # out of the super-role by /rbac/switch
+        current_roles = existing.get("roles") or []
+        if "admin" not in current_roles:
+            updates["roles"] = list(dict.fromkeys(["admin"] + current_roles))
+            updates["role"] = "admin"  # restore super-role
+        if updates:
+            await db.users.update_one({"email": admin_email}, {"$set": updates})
 
     # Seed dataset (idempotent — only runs if fleet_sites is empty)
     try:
@@ -122,10 +136,12 @@ async def startup():
 
     # Seed demo accounts, one per MVP role — idempotent
     demo_accounts = [
-        {"email": "executive@greensolutions.ai",    "name": "Ellie Executive",   "role": "executive",     "password": "Executive@123"},
-        {"email": "assetmgr@greensolutions.ai",     "name": "Alex Asset Mgr",    "role": "asset_manager", "password": "Asset@123"},
-        {"email": "ops@greensolutions.ai",          "name": "Omar O&M Mgr",      "role": "om_manager",    "password": "Ops@123"},
-        {"email": "tech@greensolutions.ai",         "name": "Tara Technician",   "role": "technician",    "password": "Tech@123"},
+        {"email": "executive@greensolutions.ai",    "name": "Ellie Executive",       "role": "executive",            "password": "Executive@123"},
+        {"email": "assetmgr@greensolutions.ai",     "name": "Alex Asset Mgr",        "role": "asset_manager",        "password": "Asset@123"},
+        {"email": "ops@greensolutions.ai",          "name": "Omar O&M Mgr",          "role": "om_manager",           "password": "Ops@123"},
+        {"email": "tech@greensolutions.ai",         "name": "Tara Technician",       "role": "technician",           "password": "Tech@123"},
+        {"email": "perf@greensolutions.ai",         "name": "Pat Performance Eng",   "role": "performance_engineer", "password": "Perf@123"},
+        {"email": "client@greensolutions.ai",       "name": "Chris Client Viewer",   "role": "client_viewer",        "password": "Client@123"},
     ]
     for acc in demo_accounts:
         exists = await db.users.find_one({"email": acc["email"]})
@@ -136,9 +152,35 @@ async def startup():
                 "password_hash": hash_password(acc["password"]),
                 "name": acc["name"],
                 "role": acc["role"],
+                "roles": [acc["role"]],
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
             logging.info("[STARTUP] Seeded demo account: %s (%s)", acc["email"], acc["role"])
+        else:
+            # ensure `roles` array exists on legacy demo docs
+            if "roles" not in exists:
+                await db.users.update_one({"id": exists["id"]}, {"$set": {"roles": [exists.get("role", "executive")]}})
+
+    # Give the client_viewer demo a default scope of 20 solar sites
+    client_user = await db.users.find_one({"email": "client@greensolutions.ai"})
+    if client_user and not client_user.get("client_scope"):
+        sample_sites = await db.fleet_sites.find(
+            {"site_type": "Utility-Scale Solar"}, {"_id": 0, "site_id": 1}
+        ).limit(20).to_list(20)
+        await db.users.update_one(
+            {"id": client_user["id"]},
+            {"$set": {"client_scope": {
+                "allowed_site_ids": [s["site_id"] for s in sample_sites],
+                "allowed_categories": [],
+            }}},
+        )
+        logging.info("[STARTUP] Seeded default client_scope for client_viewer demo (%d sites)", len(sample_sites))
+
+    # Initialise Emergent Object Storage (for evidence uploads)
+    try:
+        storage.init_storage()
+    except Exception as e:  # noqa: BLE001
+        logging.warning("[STARTUP] Storage init deferred: %s", e)
 
     # Purge earlier test junk accounts so the Administration table stays clean.
     # Keep: the 5 demo accounts + the seeded admin + anything with a real domain.

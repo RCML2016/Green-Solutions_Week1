@@ -1,8 +1,11 @@
 import { NavLink, Link, useNavigate } from "react-router-dom";
-import { LogIn, LogOut, User, Menu, Sun, Moon, KeyRound, ChevronDown } from "lucide-react";
+import { LogIn, LogOut, User, Menu, Sun, Moon, KeyRound, ChevronDown, Check } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import { ROLES, landingFor } from "@/lib/roles";
+import { toast } from "sonner";
 import PasswordChangeModal from "./PasswordChangeModal";
 
 const TOP_LINKS = [
@@ -15,12 +18,13 @@ const TOP_LINKS = [
 ];
 
 export default function TopBar() {
-  const { user, logout } = useAuth();
+  const { user, logout, switchWorkspace } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
+  const [myRoles, setMyRoles] = useState([]);
   const profileRef = useRef(null);
 
   useEffect(() => {
@@ -30,6 +34,22 @@ export default function TopBar() {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  useEffect(() => {
+    if (!user) { setMyRoles([]); return; }
+    api.get("/rbac/my-roles").then(({ data }) => setMyRoles(data.roles || [])).catch(() => setMyRoles([]));
+  }, [user?.role, user?.id]);
+
+  const doSwitch = async (role) => {
+    setProfileOpen(false);
+    const res = await switchWorkspace(role);
+    if (res.ok) {
+      toast.success(`Switched to ${ROLES[role]?.label || role}`);
+      navigate(landingFor(role));
+    } else {
+      toast.error(res.error || "Switch failed");
+    }
+  };
 
   return (
     <>
@@ -100,9 +120,35 @@ export default function TopBar() {
                   <div className="px-3 py-2 border-b border-[color:var(--line-2)]">
                     <div className="text-sm text-[color:var(--ink)]">{user.name}</div>
                     <div className="text-[11px] font-mono text-[color:var(--ink-3)] truncate">{user.email}</div>
+                    <div className="text-[10px] font-mono text-[color:var(--brand-3)] mt-1">
+                      {ROLES[user.role]?.label || user.role}
+                    </div>
                   </div>
+                  {myRoles.length > 1 && (
+                    <div className="border-b border-[color:var(--line-2)]" data-testid="profile-workspace-switcher">
+                      <div className="px-3 pt-2 pb-1 text-[10px] font-mono text-[color:var(--ink-3)]">
+                        SWITCH WORKSPACE
+                      </div>
+                      {myRoles.map((r) => {
+                        const on = r === user.role;
+                        const Icon = ROLES[r]?.icon || User;
+                        return (
+                          <button
+                            key={r}
+                            onClick={() => doSwitch(r)}
+                            data-testid={`profile-workspace-${r}`}
+                            className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-[color:var(--brand-tint)] ${on ? "text-[color:var(--brand-3)]" : "text-[color:var(--ink-2)]"}`}
+                          >
+                            <Icon size={13} className="text-[color:var(--brand-3)]" />
+                            <span className="flex-1">{ROLES[r]?.label || r}</span>
+                            {on && <Check size={12} className="text-[color:var(--brand-3)]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <button
-                    onClick={() => { setProfileOpen(false); navigate("/dashboard"); }}
+                    onClick={() => { setProfileOpen(false); navigate(landingFor(user.role)); }}
                     className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-[color:var(--ink-2)] hover:bg-[color:var(--brand-tint)] hover:text-[color:var(--brand-3)]"
                     data-testid="profile-dashboard"
                   >
