@@ -1,0 +1,24 @@
+{
+  "summary": "First-finish smoke test of Green Solutions app. Backend auth (/api/auth/login, /me, register duplicate 400), /api/contact, and /api/portfolio/metrics (Bearer-protected) all pass. Frontend: landing renders both vertical sidebar (data-testid=app-sidebar) and horizontal topbar (data-testid=app-topbar); hero headline matches. Contact form submits and shows success toast. /dashboard correctly redirects unauthenticated users to /login. Login with admin creds succeeds and redirects to /dashboard where all 4 KPI cards (kpi-portfolio-health, kpi-ai-findings, kpi-ai-confidence, kpi-energy-24h) plus AI Priority Findings list render with real backend metrics. Bad credentials show inline login-error 'Invalid email or password'. Logout clears gs_token from localStorage.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "GET /api/auth/me returns 401 without token",
+    "POST /api/auth/login (admin@greensolutions.ai) returns 200 + JWT + user",
+    "GET /api/auth/me with Bearer returns user object",
+    "GET /api/portfolio/metrics with Bearer returns KPIs and findings",
+    "POST /api/auth/register duplicate email returns 400 'Email already registered'",
+    "POST /api/contact returns 200 {ok:true}",
+    "Landing page shows sidebar + topbar + hero 'Make every renewable asset more intelligent.'",
+    "Sidebar Contact link navigates to /contact and form submits with success toast",
+    "/dashboard redirects to /login when logged out",
+    "Login flow logs in admin, redirects to /dashboard, renders 4 KPI cards with real metrics and AI Priority Findings",
+    "Bad credentials show login-error 'Invalid email or password'",
+    "Logout via topbar-logout-btn removes gs_token from localStorage"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Initial run showed 0 KPI cards due to querying before metrics fetch completed; retest with wait_for_selector confirmed all 4 KPI cards render correctly. No app-code issues."
+}
