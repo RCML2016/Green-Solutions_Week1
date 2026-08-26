@@ -8,6 +8,8 @@ import {
   MessageSquare,
   LayoutDashboard,
   ArrowUpRight,
+  UserPlus,
+  Mail,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -17,6 +19,8 @@ const NAV = [
   { to: "/solutions", label: "Solutions", icon: Cpu, section: "PLATFORM" },
   { to: "/how-it-works", label: "How It Works", icon: Workflow, section: "PLATFORM" },
   { to: "/dashboard", label: "Live Dashboard", icon: LayoutDashboard, section: "OPERATIONS", protected: true },
+  { to: "/reports", label: "Report Scheduler", icon: Mail, section: "OPERATIONS", protected: true },
+  { to: "/team", label: "Team", icon: UserPlus, section: "OPERATIONS", adminOnly: true },
   { to: "/about", label: "About", icon: Users, section: "COMPANY" },
   { to: "/contact", label: "Contact", icon: MessageSquare, section: "COMPANY" },
 ];
@@ -53,7 +57,7 @@ export default function Sidebar() {
               {sec}
             </div>
             <div className="space-y-1">
-              {NAV.filter((n) => n.section === sec).map((item) => (
+              {NAV.filter((n) => n.section === sec).filter((n) => !n.adminOnly || user?.role === "admin").map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -65,6 +69,9 @@ export default function Sidebar() {
                   <span>{item.label}</span>
                   {item.protected && !user && (
                     <span className="ml-auto text-[9px] font-mono text-white/40">AUTH</span>
+                  )}
+                  {item.adminOnly && (
+                    <span className="ml-auto text-[9px] font-mono text-[#6dfcb2]/70">ADMIN</span>
                   )}
                 </NavLink>
               ))}

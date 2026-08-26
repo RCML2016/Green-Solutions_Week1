@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { api, API } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Activity, Sparkles, Zap, AlertTriangle, Download, Send, Bot, Loader2 } from "lucide-react";
+import { Activity, Sparkles, Zap, AlertTriangle, Download, Send, Bot, Loader2, History, MessageSquarePlus, Trash2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -16,18 +16,40 @@ export default function Dashboard() {
   const captureRef = useRef(null);
   const [exporting, setExporting] = useState(false);
 
-  // Polling
+  // AI panel imperative handle for anomaly injection
+  const aiPanelRef = useRef(null);
+  const seenHighSevRef = useRef(new Set());
+  const firstLoadRef = useRef(true);
+
   useEffect(() => {
     let mounted = true;
     let timer = null;
     const fetchOnce = async () => {
       try {
-        const { data } = await api.get("/portfolio/metrics");
+        const { data: fresh } = await api.get("/portfolio/metrics");
         if (!mounted) return;
-        setData(data);
+
+        // --- Anomaly detection: new high-severity findings ---
+        const currentHigh = fresh.findings.filter((f) => f.severity === "high").map((f) => f.code);
+        if (firstLoadRef.current) {
+          currentHigh.forEach((c) => seenHighSevRef.current.add(c));
+          firstLoadRef.current = false;
+        } else {
+          const newOnes = currentHigh.filter((c) => !seenHighSevRef.current.has(c));
+          newOnes.forEach((c) => {
+            seenHighSevRef.current.add(c);
+            const finding = fresh.findings.find((f) => f.code === c);
+            if (finding && aiPanelRef.current) {
+              toast.warning(`New high-severity finding: ${c}`, { description: finding.title });
+              aiPanelRef.current.autoAsk(c, finding.title);
+            }
+          });
+        }
+
+        setData(fresh);
         setPulse(true);
         setTimeout(() => mounted && setPulse(false), 700);
-      } catch { /* ignore transient */ }
+      } catch { /* ignore */ }
       finally {
         if (mounted) setLoading(false);
       }
@@ -48,9 +70,7 @@ export default function Dashboard() {
     setExporting(true);
     try {
       const canvas = await html2canvas(captureRef.current, {
-        backgroundColor: "#062015",
-        scale: 2,
-        useCORS: true,
+        backgroundColor: "#062015", scale: 2, useCORS: true,
       });
       const img = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
@@ -61,7 +81,7 @@ export default function Dashboard() {
       pdf.addImage(img, "PNG", 0, 0, pageW, imgH);
       pdf.save(`green-solutions-dashboard-${new Date().toISOString().slice(0, 10)}.pdf`);
       toast.success("Report exported");
-    } catch (e) {
+    } catch {
       toast.error("Export failed");
     } finally {
       setExporting(false);
@@ -98,8 +118,8 @@ export default function Dashboard() {
       {loading ? (
         <div className="text-white/50 text-sm">Loading intelligence...</div>
       ) : data ? (
-        <div className="grid lg:grid-cols-[1fr_360px] gap-6" ref={captureRef}>
-          <div>
+        <div className="grid lg:grid-cols-[1fr_380px] gap-6">
+          <div ref={captureRef}>
             <div className="grid md:grid-cols-4 gap-4">
               {[
                 { l: "PORTFOLIO HEALTH", v: `${data.portfolio_health}%`, d: `↑ ${data.portfolio_health_change}%`, i: Activity },
@@ -154,13 +174,20 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <span className="font-mono text-xs text-white/70">{f.confidence}%</span>
+                    <button
+                      onClick={() => aiPanelRef.current?.askAbout(f.code, f.title)}
+                      data-testid={`ask-ai-${f.code}`}
+                      className="text-[10px] font-mono px-2 py-1 rounded-full border border-white/10 hover:border-[#22d17a]/60 hover:text-[#6dfcb2] transition"
+                    >
+                      ASK AI
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          <AiInsightPanel findings={data.findings} />
+          <AiInsightPanel ref={aiPanelRef} findings={data.findings} />
         </div>
       ) : (
         <div className="text-white/50 text-sm">Unable to load metrics.</div>
@@ -169,32 +196,71 @@ export default function Dashboard() {
   );
 }
 
-function AiInsightPanel({ findings }) {
-  const [selected, setSelected] = useState("");
-  const [q, setQ] = useState("Why is my portfolio health trending up?");
+/* --------------------- AI Insight Panel (with History) --------------------- */
+
+const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
+  const [tab, setTab] = useState("chat"); // "chat" | "history"
+  const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [q, setQ] = useState("");
+  const [selected, setSelected] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  const ask = async () => {
-    if (!q.trim() || streaming) return;
-    const userMsg = { role: "user", text: q, finding: selected || null };
-    setMessages((m) => [...m, userMsg, { role: "assistant", text: "" }]);
-    const question = q;
-    const findingCode = selected;
-    setQ("");
-    setStreaming(true);
+  const loadSessions = useCallback(async () => {
+    setLoadingSessions(true);
+    try {
+      const { data } = await api.get("/ai/sessions");
+      setSessions(data);
+    } catch {} finally { setLoadingSessions(false); }
+  }, []);
 
+  useEffect(() => { if (tab === "history") loadSessions(); }, [tab, loadSessions]);
+
+  const openSession = async (id) => {
+    try {
+      const { data } = await api.get(`/ai/sessions/${id}`);
+      setSessionId(id);
+      setMessages(data.messages.map((m) => ({ role: m.role, text: m.text, finding: m.finding_code, auto: m.auto })));
+      setTab("chat");
+    } catch (e) { toast.error("Failed to load session"); }
+  };
+
+  const removeSession = async (id, e) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this conversation?")) return;
+    try {
+      await api.delete(`/ai/sessions/${id}`);
+      setSessions((s) => s.filter((x) => x.id !== id));
+      if (sessionId === id) newSession();
+      toast.success("Deleted");
+    } catch { toast.error("Delete failed"); }
+  };
+
+  const newSession = () => {
+    setSessionId(null);
+    setMessages([]);
+    setSelected("");
+    setQ("");
+    setTab("chat");
+  };
+
+  const streamAsk = async (question, findingCode, auto = false) => {
+    setStreaming(true);
+    const userMsg = { role: "user", text: question, finding: findingCode || null, auto };
+    setMessages((m) => [...m, userMsg, { role: "assistant", text: "" }]);
     try {
       const token = localStorage.getItem("gs_token");
       const res = await fetch(`${API}/ai/insight`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ question, finding_code: findingCode || null }),
+        body: JSON.stringify({ question, finding_code: findingCode || null, session_id: sessionId, auto }),
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
       const reader = res.body.getReader();
@@ -211,6 +277,7 @@ function AiInsightPanel({ findings }) {
           if (!line.startsWith("data:")) continue;
           try {
             const payload = JSON.parse(line.slice(5).trim());
+            if (payload.session_id && !sessionId) setSessionId(payload.session_id);
             if (payload.delta) {
               setMessages((m) => {
                 const copy = [...m];
@@ -225,10 +292,10 @@ function AiInsightPanel({ findings }) {
                 return copy;
               });
             }
-          } catch { /* skip malformed */ }
+          } catch {}
         }
       }
-    } catch (e) {
+    } catch {
       setMessages((m) => {
         const copy = [...m];
         copy[copy.length - 1] = { ...copy[copy.length - 1], text: "⚠ Assistant unavailable. Try again." };
@@ -239,74 +306,152 @@ function AiInsightPanel({ findings }) {
     }
   };
 
+  const ask = () => {
+    if (!q.trim() || streaming) return;
+    const question = q;
+    setQ("");
+    streamAsk(question, selected);
+  };
+
+  // Imperative handles used by parent Dashboard for auto-alerts and quick ask
+  useImperativeHandle(ref, () => ({
+    askAbout: (code, title) => {
+      setTab("chat");
+      setSelected(code);
+      streamAsk(`Explain ${code} (${title}) and what I should do next.`, code, false);
+    },
+    autoAsk: (code, title) => {
+      setTab("chat");
+      setSelected(code);
+      streamAsk(`ALERT — a new high-severity finding just appeared: ${code} · ${title}. Give me a 2-sentence root cause and one action.`, code, true);
+    },
+  }));
+
   return (
     <aside className="rounded-2xl bg-[#04180f] border border-white/5 flex flex-col h-fit lg:sticky lg:top-24" data-testid="ai-insight-panel">
       <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-[#22d17a]/15 text-[#6dfcb2] flex items-center justify-center">
           <Bot size={16} />
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="text-sm font-medium">AI Insight Assistant</div>
           <div className="text-[10px] font-mono text-white/40">CLAUDE SONNET 5 · EXPLAINABLE</div>
         </div>
+        <button onClick={newSession} title="New chat" data-testid="ai-new-session" className="p-1.5 rounded-lg hover:bg-white/5 text-white/60 hover:text-[#6dfcb2]">
+          <MessageSquarePlus size={14} />
+        </button>
       </div>
 
-      <div ref={scrollRef} className="p-5 space-y-3 max-h-[420px] overflow-y-auto min-h-[240px]">
-        {messages.length === 0 && (
-          <div className="text-xs text-white/50 leading-relaxed">
-            Ask about any finding or portfolio metric. Try: <em>"Explain INV-04 and what to do next."</em>
-          </div>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={`text-sm ${m.role === "user" ? "text-white/90" : "text-white/75"}`}>
-            <div className="text-[10px] font-mono text-white/40 mb-1">
-              {m.role === "user" ? "YOU" : "ASSISTANT"}{m.finding ? ` · ${m.finding}` : ""}
-            </div>
-            <div className={`rounded-xl px-3 py-2 ${m.role === "user" ? "bg-white/[0.04] border border-white/5" : "bg-[#22d17a]/10 border border-[#22d17a]/20"}`}>
-              {m.text || (streaming && i === messages.length - 1 ? "…" : "")}
-            </div>
-          </div>
+      <div className="px-4 pt-3 flex gap-1">
+        {[
+          { id: "chat", label: "Chat", icon: Bot },
+          { id: "history", label: "History", icon: History },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            data-testid={`ai-tab-${t.id}`}
+            className={`flex items-center gap-1.5 text-[11px] font-mono px-3 py-1.5 rounded-full transition ${tab === t.id ? "bg-[#22d17a]/15 text-[#6dfcb2]" : "text-white/50 hover:text-white/80"}`}
+          >
+            <t.icon size={12} /> {t.label.toUpperCase()}
+          </button>
         ))}
       </div>
 
-      <div className="p-4 border-t border-white/5 space-y-2">
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setSelected("")}
-            className={`text-[10px] font-mono px-2 py-1 rounded-full border ${!selected ? "border-[#22d17a] text-[#6dfcb2]" : "border-white/10 text-white/50"}`}
-          >
-            GENERAL
-          </button>
-          {findings.map((f) => (
-            <button
-              key={f.code}
-              onClick={() => setSelected(f.code)}
-              className={`text-[10px] font-mono px-2 py-1 rounded-full border ${selected === f.code ? "border-[#22d17a] text-[#6dfcb2]" : "border-white/10 text-white/50"}`}
-              data-testid={`ai-context-${f.code}`}
-            >
-              {f.code}
-            </button>
-          ))}
+      {tab === "chat" ? (
+        <>
+          <div ref={scrollRef} className="p-5 space-y-3 max-h-[420px] overflow-y-auto min-h-[240px]">
+            {messages.length === 0 && (
+              <div className="text-xs text-white/50 leading-relaxed">
+                Ask about any finding or metric. When a new high-severity finding appears, I'll auto-alert here with <Bell size={11} className="inline text-amber-300 -mt-0.5" /> and suggest an action.
+              </div>
+            )}
+            {messages.map((m, i) => (
+              <div key={i} className={`text-sm ${m.role === "user" ? "text-white/90" : "text-white/75"}`}>
+                <div className="text-[10px] font-mono text-white/40 mb-1 flex items-center gap-1.5">
+                  {m.auto && <Bell size={11} className="text-amber-300" />}
+                  {m.role === "user" ? (m.auto ? "AUTO-ALERT" : "YOU") : "ASSISTANT"}{m.finding ? ` · ${m.finding}` : ""}
+                </div>
+                <div className={`rounded-xl px-3 py-2 whitespace-pre-wrap ${m.role === "user" ? (m.auto ? "bg-amber-500/5 border border-amber-500/20" : "bg-white/[0.04] border border-white/5") : "bg-[#22d17a]/10 border border-[#22d17a]/20"}`}>
+                  {m.text || (streaming && i === messages.length - 1 ? "…" : "")}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="p-4 border-t border-white/5 space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setSelected("")}
+                className={`text-[10px] font-mono px-2 py-1 rounded-full border ${!selected ? "border-[#22d17a] text-[#6dfcb2]" : "border-white/10 text-white/50"}`}
+              >
+                GENERAL
+              </button>
+              {findings.map((f) => (
+                <button
+                  key={f.code}
+                  onClick={() => setSelected(f.code)}
+                  className={`text-[10px] font-mono px-2 py-1 rounded-full border ${selected === f.code ? "border-[#22d17a] text-[#6dfcb2]" : "border-white/10 text-white/50"}`}
+                  data-testid={`ai-context-${f.code}`}
+                >
+                  {f.code}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && ask()}
+                data-testid="ai-input"
+                placeholder="Ask about a finding..."
+                className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#22d17a] text-white"
+              />
+              <button
+                onClick={ask}
+                disabled={streaming || !q.trim()}
+                data-testid="ai-send"
+                className="rounded-xl px-3 bg-[#22d17a] text-[#062015] hover:bg-[#6dfcb2] disabled:opacity-50"
+              >
+                {streaming ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="p-4" data-testid="ai-history-list">
+          {loadingSessions ? (
+            <div className="text-xs text-white/50">Loading history...</div>
+          ) : sessions.length === 0 ? (
+            <div className="text-xs text-white/50">No past conversations yet.</div>
+          ) : (
+            <div className="space-y-1 max-h-[420px] overflow-y-auto">
+              {sessions.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => openSession(s.id)}
+                  data-testid={`session-${s.id}`}
+                  className={`w-full text-left rounded-xl border p-3 flex items-start gap-2 hover:border-[#22d17a]/40 transition ${s.id === sessionId ? "border-[#22d17a]/60 bg-[#22d17a]/5" : "border-white/5"}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white/90 truncate">{s.title || "Untitled chat"}</div>
+                    <div className="text-[10px] font-mono text-white/40 mt-1">
+                      {new Date(s.updated_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <span
+                    onClick={(e) => removeSession(s.id, e)}
+                    className="p-1 rounded text-white/40 hover:text-red-300 cursor-pointer"
+                    data-testid={`session-delete-${s.id}`}
+                  >
+                    <Trash2 size={13} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="flex gap-2">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && ask()}
-            data-testid="ai-input"
-            placeholder="Ask about a finding..."
-            className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#22d17a] text-white"
-          />
-          <button
-            onClick={ask}
-            disabled={streaming || !q.trim()}
-            data-testid="ai-send"
-            className="rounded-xl px-3 bg-[#22d17a] text-[#062015] hover:bg-[#6dfcb2] disabled:opacity-50"
-          >
-            {streaming ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
-          </button>
-        </div>
-      </div>
+      )}
     </aside>
   );
-}
+});

@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 3 full-stack test. Backend: 43/43 pytest tests pass (new suite tests/test_iteration3.py covering AI session history, Team RBAC, Report scheduler + regression suite backend_test.py). Frontend: Playwright verified admin login, KPI 5s polling, ASK AI streaming, AI History tab (list/open/delete), new-session reset, manual ask streaming, /reports cadence+chips+toggle+save+preview+persistence, /team invite(owner)+temp password+list row+remove+self-remove disabled, non-admin redirect from /team, PDF export download, forgot-password. No 500s or console errors except expected 403 for non-admin /team/users.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/portfolio/metrics", "issue": "Findings list is static (always INV-04, INV-01 high / INV-07, INV-12 medium). A 'new high-severity finding' can therefore never appear, so the Anomaly Auto-Alert feature (seenHighSevRef -> toast.warning -> autoAsk) is unreachable at runtime even though the code path is correct and the backend persists auto=true messages (verified directly via API)."},
+      {"endpoint": "POST /api/reports/preview", "issue": "Preview reads only the persisted schedule, ignoring unsaved UI state — user who adds recipients and clicks Send Preview without saving gets a stale recipient count."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Team.jsx", "issue": "load() (GET /team/users) fires in useEffect before the role guard, so a non-admin visiting /team triggers a 403 and two red 'Admin access required' toasts on the dashboard after redirect. Guard the fetch with user?.role === 'admin'.", "selector": "[data-testid=\"team-page\"]", "priority": "MEDIUM"},
+      {"component": "AiInsightPanel history", "issue": "Delete control is a <span onClick> nested inside the session <button> (a11y/keyboard-inaccessible). Functionally works.", "selector": "[data-testid^=\"session-delete-\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "AI ask (new session)", "issue": "streamAsk captures sessionId from closure; two rapid asks before the first SSE session_id event lands will create two separate sessions instead of continuing one.", "affected_selectors": ["[data-testid=\"ai-send\"]", "[data-testid^=\"ask-ai-\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "/team, /reports, /dashboard", "issues": ["No blocking contrast/spacing problems found; dark-green theme consistent, sidebar/footer alignment fine", "window.confirm() native dialogs used for session + user deletion instead of a shadcn AlertDialog (inconsistent with the rest of the design system)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Team.jsx: skip GET /team/users when user.role !== 'admin' to avoid 403 error toasts on redirect",
+    "Make /api/portfolio/metrics occasionally surface a rotating new high-severity finding (or add a debug trigger) so the Anomaly Auto-Alert path is actually reachable/demoable",
+    "Optional: have Send Preview post the current (unsaved) config or auto-save before preview",
+    "Optional: replace window.confirm with an AlertDialog for delete confirmations"
+  ],
+  "critical_code_review_comments": [
+    "Auth hardening deviations vs the auth playbook: JWT stored in localStorage (no httpOnly cookie), CORS allow_origins=['*'] with allow_credentials=False, and no brute-force lockout after 5 failed logins. bcrypt hashes verified as $2b$ and seed_admin correctly rehashes when ADMIN_PASSWORD changes.",
+    "/api/ai/insight persists the assistant message inside a `finally` block in the generator — if the client aborts mid-stream the partial text is still saved; acceptable but worth noting.",
+    "server.py is at 530 lines and growing with each iteration; consider splitting routers (auth / ai / team / reports) before it crosses ~700 lines."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/conftest.py"
+  ],
+  "success_rate": {"backend": "100% (43/43)", "frontend": "100% of tested flows (1 minor RBAC toast defect)"},
+  "seed_data_creation": "Transient users test_qa_* (invite/register), AI sessions and report schedules; all cleaned up from MongoDB after the run. 7 admin AI sessions from streaming tests remain as harmless demo history.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@greensolutions.ai / Admin@123 (from /app/memory/test_credentials.md); non-admin created ad hoc via POST /api/auth/register",
+  "context_for_next_testing_agent": "Backend suites: tests/backend_test.py (iters 1-2 regression) + tests/test_iteration3.py (AI sessions, Team RBAC, Report scheduler). conftest.py holds shared fixtures (admin_headers, normal_user) and a per-worker cleanup that must only delete emails it created (pytest.ini runs -n 2, a regex-based cleanup previously deleted the other worker's user mid-run). Anomaly auto-alert cannot be triggered end-to-end because portfolio findings are static — verified by code review + backend auto=true persistence test.",
+  "rca_of_the_issue": "Non-admin 403 toasts on /team: Team.jsx's useEffect load() runs before the `if (user.role !== 'admin') return <Navigate/>` guard (effects run after first render), so the API call is issued and formatApiError surfaces the 403; React StrictMode double-invokes the effect in dev, producing two toasts."
+}

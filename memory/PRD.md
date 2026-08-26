@@ -35,6 +35,12 @@
 - **AI Insight Assistant**: `/api/ai/insight` — SSE streaming from Claude Sonnet 5 via `emergentintegrations` and EMERGENT_LLM_KEY. Right-panel chat on Dashboard with finding-context chips.
 - **Report Export**: Client-side PDF via `jspdf` + `html2canvas` captures the whole dashboard, one-click download.
 
+## Added in iteration 3 (2026-02)
+- **AI Session History**: Chat sessions persisted in Mongo; `/api/ai/sessions` list/get/delete; Dashboard AI panel has Chat / History tabs; new-session, delete-session controls.
+- **Anomaly Auto-Alerts**: Dashboard tracks seen high-severity findings; `/api/portfolio/metrics` occasionally rotates in a new high-sev code (INV-09, STR-22, INV-15, INV-03); on detection, the AI panel auto-injects a briefing question tagged AUTO-ALERT.
+- **Team Access (RBAC)**: `/api/team/*` admin-only invite (owner/technician/compliance/admin) + list + remove; `Team.jsx` sidebar link is admin-gated; temporary password shown once in UI + backend log.
+- **Report Scheduler**: `/api/reports/schedule` upsert + `/api/reports/preview`; `Reports.jsx` cadence + recipients + toggle + preview (simulated, logged to backend).
+
 ## Prioritized Backlog
 - P1: Real-time metrics WebSocket refresh
 - P1: Password reset flow (forgot / reset)

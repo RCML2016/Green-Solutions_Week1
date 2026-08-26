@@ -15,6 +15,8 @@ import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
+import Team from "@/pages/Team";
+import Reports from "@/pages/Reports";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -47,6 +49,22 @@ function App() {
               element={
                 <Protected>
                   <Dashboard />
+                </Protected>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <Protected>
+                  <Reports />
+                </Protected>
+              }
+            />
+            <Route
+              path="/team"
+              element={
+                <Protected>
+                  <Team />
                 </Protected>
               }
             />
