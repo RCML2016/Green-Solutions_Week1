@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
-import { Mail, Plus, X, Calendar, Send, Power } from "lucide-react";
+import { Mail, Plus, X, Calendar, Send, Power, Image as ImageIcon, Sparkles } from "lucide-react";
 
 const FREQS = [
   { value: "daily", label: "Daily", desc: "Every business day at 08:00 local" },
@@ -16,19 +16,48 @@ export default function Reports() {
   const [previewing, setPreviewing] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Branding
+  const [branding, setBranding] = useState({ company_name: "", cover_note: "", logo_data_url: "" });
+  const [savingBrand, setSavingBrand] = useState(false);
+  const fileRef = useRef(null);
+
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/reports/schedule");
+        const [{ data: sched }, { data: br }] = await Promise.all([
+          api.get("/reports/schedule"),
+          api.get("/reports/branding"),
+        ]);
         setCfg({
-          frequency: data.frequency || "weekly",
-          recipients: data.recipients || [],
-          enabled: !!data.enabled,
+          frequency: sched.frequency || "weekly",
+          recipients: sched.recipients || [],
+          enabled: !!sched.enabled,
+        });
+        setBranding({
+          company_name: br.company_name || "",
+          cover_note: br.cover_note || "",
+          logo_data_url: br.logo_data_url || "",
         });
       } catch {}
       finally { setLoading(false); }
     })();
   }, []);
+
+  const onLogoPick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 140_000) return toast.error("Logo must be under 140 KB");
+    const reader = new FileReader();
+    reader.onload = () => setBranding((b) => ({ ...b, logo_data_url: reader.result }));
+    reader.readAsDataURL(file);
+  };
+
+  const saveBranding = async () => {
+    setSavingBrand(true);
+    try { await api.post("/reports/branding", branding); toast.success("Branding saved"); }
+    catch (e) { toast.error(formatApiError(e)); }
+    finally { setSavingBrand(false); }
+  };
 
   const addRecipient = () => {
     const v = emailInput.trim().toLowerCase();
@@ -153,6 +182,96 @@ export default function Reports() {
       <div className="mt-8 rounded-xl border border-[color:var(--line)] bg-white p-4 text-[11px] font-mono text-[color:var(--ink-3)]">
         DEMO NOTE · Deliveries are simulated and logged to the backend console. Wire up
         Resend/SendGrid to send real PDFs.
+      </div>
+
+      {/* --- Branding --- */}
+      <div className="mt-16">
+        <div className="eyebrow">CUSTOM BRANDING</div>
+        <h2 className="font-display text-2xl md:text-3xl mt-3 text-[color:var(--ink)]">
+          Make every exported PDF feel <span className="text-[color:var(--brand-3)]">first-party.</span>
+        </h2>
+        <p className="text-[color:var(--ink-3)] text-sm mt-2 max-w-xl">
+          Add your logo, company name, and a short cover note. Applied automatically on every dashboard export.
+        </p>
+
+        <div className="grid lg:grid-cols-2 gap-6 mt-8">
+          <div className="gs-card p-6 space-y-4" data-testid="branding-form">
+            <div>
+              <label className="text-[10px] font-mono text-[color:var(--ink-3)]">COMPANY NAME</label>
+              <input
+                data-testid="branding-company"
+                value={branding.company_name}
+                onChange={(e) => setBranding({ ...branding, company_name: e.target.value })}
+                className="gs-input mt-1" placeholder="Acme Renewables"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-mono text-[color:var(--ink-3)]">COVER NOTE</label>
+              <textarea
+                rows={4} data-testid="branding-note"
+                value={branding.cover_note}
+                onChange={(e) => setBranding({ ...branding, cover_note: e.target.value })}
+                className="gs-input mt-1"
+                placeholder="Weekly operations digest for stakeholders..."
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-mono text-[color:var(--ink-3)]">LOGO (PNG or SVG, ≤140 KB)</label>
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="gs-btn-ghost text-sm" style={{ padding: "8px 14px" }}
+                  data-testid="branding-logo-pick"
+                >
+                  <ImageIcon size={14} /> Choose file
+                </button>
+                <input ref={fileRef} onChange={onLogoPick} type="file" accept="image/*" className="hidden" />
+                {branding.logo_data_url && (
+                  <button
+                    type="button"
+                    onClick={() => setBranding({ ...branding, logo_data_url: "" })}
+                    className="text-xs text-[color:var(--coral)]"
+                    data-testid="branding-logo-clear"
+                  >Remove</button>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={saveBranding} disabled={savingBrand}
+              data-testid="branding-save"
+              className="gs-btn-primary disabled:opacity-60"
+            >
+              {savingBrand ? "Saving..." : "Save Branding"}
+            </button>
+          </div>
+
+          {/* Preview */}
+          <div className="gs-card p-6" data-testid="branding-preview">
+            <div className="text-[10px] font-mono text-[color:var(--ink-3)]">COVER PAGE PREVIEW</div>
+            <div className="mt-3 rounded-xl overflow-hidden bg-white border border-[color:var(--line)]">
+              <div className="h-2" style={{ background: "var(--brand)" }} />
+              <div className="p-6">
+                {branding.logo_data_url ? (
+                  <img src={branding.logo_data_url} alt="logo" className="max-h-16 mb-4 object-contain" />
+                ) : (
+                  <div className="max-h-16 flex items-center text-[color:var(--ink-3)] text-xs mb-4">
+                    <Sparkles size={14} className="text-[color:var(--brand-3)] mr-2" /> Your logo appears here
+                  </div>
+                )}
+                <div className="font-display text-2xl text-[color:var(--ink)]">
+                  {branding.company_name || "Portfolio Report"}
+                </div>
+                <div className="text-xs font-mono text-[color:var(--ink-3)] mt-1">
+                  Green Solutions · {new Date().toLocaleDateString()}
+                </div>
+                <p className="text-sm text-[color:var(--ink-2)] mt-6 whitespace-pre-wrap">
+                  {branding.cover_note || "Your cover note appears here — perfect for a monthly executive summary or a stakeholder update."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

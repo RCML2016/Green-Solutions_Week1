@@ -1,7 +1,7 @@
 import { NavLink, Link } from "react-router-dom";
 import {
   Home, Layers, Cpu, Workflow, Users, MessageSquare,
-  LayoutDashboard, ArrowUpRight, UserPlus, Mail,
+  LayoutDashboard, ArrowUpRight, UserPlus, Mail, Bell,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/solutions", label: "Solutions", icon: Cpu, section: "PLATFORM" },
   { to: "/how-it-works", label: "How It Works", icon: Workflow, section: "PLATFORM" },
   { to: "/dashboard", label: "Live Dashboard", icon: LayoutDashboard, section: "OPERATIONS", protected: true },
+  { to: "/alerts", label: "Alert Center", icon: Bell, section: "OPERATIONS", protected: true },
   { to: "/reports", label: "Report Scheduler", icon: Mail, section: "OPERATIONS", protected: true },
   { to: "/team", label: "Team", icon: UserPlus, section: "OPERATIONS", adminOnly: true },
   { to: "/about", label: "About", icon: Users, section: "COMPANY" },

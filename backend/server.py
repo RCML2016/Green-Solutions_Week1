@@ -128,6 +128,30 @@ class ScheduleRequest(BaseModel):
     enabled: bool = True
 
 
+class PortfolioCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    region: Optional[str] = Field(default=None, max_length=60)
+
+
+class AlertCreate(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=200)
+    severity: str = Field(pattern="^(high|medium|low)$")
+    confidence: int = Field(ge=0, le=100)
+    portfolio_id: Optional[str] = None
+
+
+class BrandingRequest(BaseModel):
+    company_name: str = Field(default="", max_length=80)
+    cover_note: str = Field(default="", max_length=500)
+    logo_data_url: str = Field(default="", max_length=200000)  # base64 data URL up to ~150KB
+
+
+class SnapshotCreate(BaseModel):
+    portfolio_id: Optional[str] = None
+    title: Optional[str] = Field(default=None, max_length=120)
+
+
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -144,6 +168,11 @@ async def startup():
     await db.ai_sessions.create_index("user_id")
     await db.ai_messages.create_index("session_id")
     await db.report_schedules.create_index("user_id", unique=True)
+    await db.portfolios.create_index([("user_id", 1), ("id", 1)])
+    await db.alerts.create_index([("user_id", 1), ("created_at", -1)])
+    await db.snapshots.create_index("token", unique=True)
+    await db.snapshots.create_index("expires_at", expireAfterSeconds=0)
+    await db.branding.create_index("user_id", unique=True)
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@greensolutions.ai").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
@@ -231,10 +260,18 @@ async def contact(payload: ContactRequest):
 
 
 @api_router.get("/portfolio/metrics")
-async def portfolio_metrics(user: dict = Depends(get_current_user)):
-    # Jittered live-feel metrics — refreshed on every poll
+async def portfolio_metrics(portfolio_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    # Optionally scope to a specific portfolio (varies confidence baseline slightly)
+    baseline_shift = 0
+    if portfolio_id:
+        p = await db.portfolios.find_one({"id": portfolio_id, "user_id": user["id"]})
+        if not p:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+        # deterministic shift per portfolio so different portfolios feel different
+        baseline_shift = (sum(ord(c) for c in portfolio_id) % 7) - 3
+
     def jitter(base, spread=1.5, lo=None, hi=None):
-        v = base + random.uniform(-spread, spread)
+        v = base + baseline_shift + random.uniform(-spread, spread)
         if lo is not None: v = max(lo, v)
         if hi is not None: v = min(hi, v)
         return round(v, 1)
@@ -543,6 +580,149 @@ async def preview_report(user: dict = Depends(get_current_user)):
         "recipients": recipients,
         "frequency": frequency,
     }
+
+
+# --- Portfolios ---
+@api_router.get("/portfolios")
+async def list_portfolios(user: dict = Depends(get_current_user)):
+    items = await db.portfolios.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)
+    if not items:
+        # Auto-seed a default portfolio the first time
+        default = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "name": "Main Renewable Fleet",
+            "region": "Global",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.portfolios.insert_one(default)
+        items = [default]
+        items[0].pop("_id", None)
+    return items
+
+
+@api_router.post("/portfolios")
+async def create_portfolio(payload: PortfolioCreate, user: dict = Depends(get_current_user)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": payload.name,
+        "region": payload.region or "",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.portfolios.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.delete("/portfolios/{portfolio_id}")
+async def delete_portfolio(portfolio_id: str, user: dict = Depends(get_current_user)):
+    res = await db.portfolios.delete_one({"id": portfolio_id, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    return {"ok": True}
+
+
+# --- Alerts ---
+@api_router.get("/alerts")
+async def list_alerts(
+    severity: Optional[str] = None,
+    code: Optional[str] = None,
+    since_hours: int = 168,
+    user: dict = Depends(get_current_user),
+):
+    q = {"user_id": user["id"]}
+    if severity:
+        q["severity"] = severity
+    if code:
+        q["code"] = code
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, min(720, since_hours)))
+    q["created_at"] = {"$gte": cutoff.isoformat()}
+    items = await db.alerts.find(q, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+    return items
+
+
+@api_router.post("/alerts")
+async def push_alert(payload: AlertCreate, user: dict = Depends(get_current_user)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "code": payload.code,
+        "title": payload.title,
+        "severity": payload.severity,
+        "confidence": payload.confidence,
+        "portfolio_id": payload.portfolio_id,
+        "acknowledged": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.alerts.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.post("/alerts/{alert_id}/acknowledge")
+async def ack_alert(alert_id: str, user: dict = Depends(get_current_user)):
+    res = await db.alerts.update_one({"id": alert_id, "user_id": user["id"]}, {"$set": {"acknowledged": True}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"ok": True}
+
+
+# --- Report branding ---
+@api_router.get("/reports/branding")
+async def get_branding(user: dict = Depends(get_current_user)):
+    cfg = await db.branding.find_one({"user_id": user["id"]}, {"_id": 0})
+    return cfg or {"user_id": user["id"], "company_name": "", "cover_note": "", "logo_data_url": ""}
+
+
+@api_router.post("/reports/branding")
+async def set_branding(payload: BrandingRequest, user: dict = Depends(get_current_user)):
+    doc = {
+        "user_id": user["id"],
+        "company_name": payload.company_name,
+        "cover_note": payload.cover_note,
+        "logo_data_url": payload.logo_data_url,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.branding.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
+    return {"ok": True, "branding": doc}
+
+
+# --- Public snapshots ---
+@api_router.post("/snapshots")
+async def create_snapshot(payload: SnapshotCreate, user: dict = Depends(get_current_user)):
+    # Capture current metrics into an immutable snapshot
+    metrics_resp = await portfolio_metrics(portfolio_id=payload.portfolio_id, user=user)
+    token = secrets.token_urlsafe(16)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "token": token,
+        "user_id": user["id"],
+        "portfolio_id": payload.portfolio_id,
+        "title": payload.title or metrics_resp.get("server_time", "Snapshot"),
+        "metrics": metrics_resp,
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=14),
+    }
+    await db.snapshots.insert_one(doc)
+    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    return {
+        "ok": True,
+        "token": token,
+        "url": f"{frontend_url}/s/{token}",
+        "expires_at": doc["expires_at"].isoformat(),
+    }
+
+
+@api_router.get("/public/snapshots/{token}")
+async def get_snapshot(token: str):
+    snap = await db.snapshots.find_one({"token": token}, {"_id": 0, "user_id": 0})
+    if not snap:
+        raise HTTPException(status_code=404, detail="Snapshot not found or expired")
+    # Convert datetime fields for JSON response
+    for k in ("created_at", "expires_at"):
+        if isinstance(snap.get(k), datetime):
+            snap[k] = snap[k].isoformat()
+    return snap
 
 
 app.include_router(api_router)

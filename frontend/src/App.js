@@ -18,6 +18,8 @@ import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import Team from "@/pages/Team";
 import Reports from "@/pages/Reports";
+import Alerts from "@/pages/Alerts";
+import Snapshot from "@/pages/Snapshot";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -70,11 +72,20 @@ function App() {
                 </Protected>
               }
             />
+            <Route
+              path="/alerts"
+              element={
+                <Protected>
+                  <Alerts />
+                </Protected>
+              }
+            />
           </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/s/:token" element={<Snapshot />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

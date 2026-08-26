@@ -55,6 +55,12 @@
 - **Findings filter**: severity chips (high/medium/low), min-confidence slider, code/title search, reset. Renders `findings-empty` when nothing matches.
 - **Theme toggle**: `ThemeProvider` + `data-theme` attribute on `<html>`. Soft dark mode preserves the shine (deep forest bg, mint tints). Toggle in topbar; persists in `localStorage["gs_theme"]`.
 
+## Iteration 6 — Multi-portfolio, Alert Center, Branded PDFs, Public snapshots (2026-02)
+- **Multi-portfolio**: `/api/portfolios` GET/POST/DELETE; auto-seeds "Main Renewable Fleet" on first load; dashboard header selector with add-new inline; metrics endpoint accepts `?portfolio_id=` and shifts baseline deterministically per portfolio.
+- **Alert Center**: `/api/alerts` GET (with severity/code/since_hours filters), POST (create), POST `/acknowledge`. Dashboard auto-posts on new high-severity detection. New `/alerts` page groups by day with filter chips + range picker + search + ack.
+- **Custom PDF branding**: `/api/reports/branding` upsert; Reports page adds company name, cover note, logo upload (base64, ≤140KB) + live cover-page preview. Dashboard export automatically prepends a branded cover page if any field is set.
+- **Public snapshot links**: `POST /api/snapshots` captures a metrics blob + returns a shareable `/s/:token` URL (14-day TTL via Mongo `expireAfterSeconds`). Public `GET /api/public/snapshots/{token}` (no auth). New `Snapshot.jsx` route renders a stripped read-only dashboard with a "Get live intelligence" CTA.
+
 ## Prioritized Backlog
 - P1: Real-time metrics WebSocket refresh
 - P1: Password reset flow (forgot / reset)

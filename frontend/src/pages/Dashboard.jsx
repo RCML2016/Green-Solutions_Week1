@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
-import { api, API } from "@/lib/api";
+import { api, API, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Activity, Sparkles, Zap, AlertTriangle, Download, Send, Bot, Loader2, History, MessageSquarePlus, Trash2, Bell, Filter, X } from "lucide-react";
+import { Activity, Sparkles, Zap, AlertTriangle, Download, Send, Bot, Loader2, History, MessageSquarePlus, Trash2, Bell, Filter, X, ChevronDown, Plus, Share2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -16,6 +16,59 @@ export default function Dashboard() {
   const [pulse, setPulse] = useState(false);
   const captureRef = useRef(null);
   const [exporting, setExporting] = useState(false);
+
+  // Portfolios
+  const [portfolios, setPortfolios] = useState([]);
+  const [activePid, setActivePid] = useState(null);
+  const [portfolioMenu, setPortfolioMenu] = useState(false);
+  const [newPortfolioName, setNewPortfolioName] = useState("");
+  const [creatingP, setCreatingP] = useState(false);
+  const portfolioRef = useRef(null);
+
+  // Share snapshot
+  const [sharing, setSharing] = useState(false);
+  const [shareLink, setShareLink] = useState("");
+
+  useEffect(() => {
+    const off = (e) => { if (portfolioRef.current && !portfolioRef.current.contains(e.target)) setPortfolioMenu(false); };
+    document.addEventListener("mousedown", off);
+    return () => document.removeEventListener("mousedown", off);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/portfolios");
+        setPortfolios(data);
+        if (data.length && !activePid) setActivePid(data[0].id);
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const createPortfolio = async () => {
+    if (!newPortfolioName.trim()) return;
+    setCreatingP(true);
+    try {
+      const { data } = await api.post("/portfolios", { name: newPortfolioName });
+      setPortfolios((p) => [...p, data]);
+      setActivePid(data.id);
+      setNewPortfolioName("");
+      setPortfolioMenu(false);
+      toast.success(`Portfolio "${data.name}" added`);
+    } catch (e) { toast.error(formatApiError(e)); }
+    finally { setCreatingP(false); }
+  };
+
+  const share = async () => {
+    setSharing(true);
+    try {
+      const { data } = await api.post("/snapshots", { portfolio_id: activePid });
+      setShareLink(data.url);
+      try { await navigator.clipboard.writeText(data.url); toast.success("Snapshot link copied"); } catch { toast.success("Snapshot ready"); }
+    } catch (e) { toast.error(formatApiError(e)); }
+    finally { setSharing(false); }
+  };
 
   const aiPanelRef = useRef(null);
   const seenHighSevRef = useRef(new Set());
@@ -40,7 +93,9 @@ export default function Dashboard() {
     let timer = null;
     const fetchOnce = async () => {
       try {
-        const { data: fresh } = await api.get("/portfolio/metrics");
+        const { data: fresh } = await api.get("/portfolio/metrics", {
+          params: activePid ? { portfolio_id: activePid } : {},
+        });
         if (!mounted) return;
 
         const currentHigh = fresh.findings.filter((f) => f.severity === "high").map((f) => f.code);
@@ -55,6 +110,14 @@ export default function Dashboard() {
             if (finding && aiPanelRef.current) {
               toast.warning(`New high-severity finding: ${c}`, { description: finding.title });
               aiPanelRef.current.autoAsk(c, finding.title);
+              // Push to Alert Center
+              api.post("/alerts", {
+                code: finding.code,
+                title: finding.title,
+                severity: finding.severity,
+                confidence: finding.confidence,
+                portfolio_id: activePid || null,
+              }).catch(() => {});
             }
           });
         }
@@ -68,7 +131,8 @@ export default function Dashboard() {
     fetchOnce();
     timer = setInterval(fetchOnce, REFRESH_MS);
     return () => { mounted = false; clearInterval(timer); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePid]);
 
   const sevStyle = {
     high: { color: "#b91c1c", background: "#fee2e2", border: "#fecaca" },
@@ -80,17 +144,54 @@ export default function Dashboard() {
     if (!captureRef.current) return;
     setExporting(true);
     try {
+      // Load branding
+      let branding = { company_name: "", cover_note: "", logo_data_url: "" };
+      try { branding = (await api.get("/reports/branding")).data; } catch {}
+
       const canvas = await html2canvas(captureRef.current, {
-        backgroundColor: "#f4f7f0", scale: 2, useCORS: true,
+        backgroundColor: getComputedStyle(document.body).backgroundColor || "#f4f7f0",
+        scale: 2, useCORS: true,
       });
       const img = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
       const pageW = pdf.internal.pageSize.getWidth();
-      const imgH = (canvas.height * pageW) / canvas.width;
+      const pageH = pdf.internal.pageSize.getHeight();
+
+      // COVER PAGE if any branding is set
+      const hasBranding = branding.company_name || branding.cover_note || branding.logo_data_url;
+      if (hasBranding) {
+        pdf.setFillColor(244, 247, 240);
+        pdf.rect(0, 0, pageW, pageH, "F");
+        // Emerald bar
+        pdf.setFillColor(16, 185, 129);
+        pdf.rect(0, 0, pageW, 8, "F");
+        if (branding.logo_data_url) {
+          try { pdf.addImage(branding.logo_data_url, "PNG", 40, 60, 120, 60, undefined, "FAST"); } catch {}
+        }
+        pdf.setTextColor(8, 43, 28);
+        pdf.setFontSize(28);
+        pdf.text(branding.company_name || "Portfolio Report", 40, 180);
+        pdf.setFontSize(11);
+        pdf.setTextColor(61, 77, 67);
+        const dateStr = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+        pdf.text(`Green Solutions · ${dateStr}`, 40, 200);
+        if (branding.cover_note) {
+          const lines = pdf.splitTextToSize(branding.cover_note, pageW - 80);
+          pdf.setFontSize(12);
+          pdf.setTextColor(8, 43, 28);
+          pdf.text(lines, 40, 250);
+        }
+        pdf.addPage();
+      }
+
+      // Dashboard image page
       pdf.setFillColor(244, 247, 240);
-      pdf.rect(0, 0, pageW, pdf.internal.pageSize.getHeight(), "F");
+      pdf.rect(0, 0, pageW, pageH, "F");
+      const imgH = (canvas.height * pageW) / canvas.width;
       pdf.addImage(img, "PNG", 0, 0, pageW, imgH);
-      pdf.save(`green-solutions-dashboard-${new Date().toISOString().slice(0, 10)}.pdf`);
+
+      const fname = `${(branding.company_name || "green-solutions").toLowerCase().replace(/\s+/g, "-")}-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      pdf.save(fname);
       toast.success("Report exported");
     } catch { toast.error("Export failed"); }
     finally { setExporting(false); }
@@ -110,7 +211,71 @@ export default function Dashboard() {
             Portfolio intelligence and AI findings — streaming from the intelligence pipeline.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Portfolio selector */}
+          <div className="relative" ref={portfolioRef}>
+            <button
+              onClick={() => setPortfolioMenu((v) => !v)}
+              data-testid="portfolio-selector"
+              className="flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--bg-2)] px-4 py-2.5 text-sm text-[color:var(--ink-2)] hover:border-[color:var(--brand)] transition"
+            >
+              <span className="text-[10px] font-mono text-[color:var(--ink-3)]">PORTFOLIO</span>
+              <span className="text-[color:var(--ink)]">{portfolios.find((p) => p.id === activePid)?.name || "…"}</span>
+              <ChevronDown size={12} className={`transition ${portfolioMenu ? "rotate-180" : ""}`} />
+            </button>
+            {portfolioMenu && (
+              <div className="absolute right-0 mt-2 w-72 gs-card p-2 z-30" data-testid="portfolio-menu">
+                <div className="px-3 py-2 text-[10px] font-mono text-[color:var(--ink-3)]">SWITCH</div>
+                {portfolios.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setActivePid(p.id); setPortfolioMenu(false); }}
+                    data-testid={`portfolio-option-${p.id}`}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-[color:var(--brand-tint)] ${p.id === activePid ? "text-[color:var(--brand-3)] bg-[color:var(--brand-tint)]" : "text-[color:var(--ink-2)]"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>{p.name}</span>
+                      {p.region && <span className="text-[10px] font-mono text-[color:var(--ink-3)]">{p.region}</span>}
+                    </div>
+                  </button>
+                ))}
+                <div className="border-t border-[color:var(--line-2)] mt-2 pt-2 px-2 pb-2">
+                  <div className="text-[10px] font-mono text-[color:var(--ink-3)] mb-1">ADD NEW</div>
+                  <div className="flex gap-2">
+                    <input
+                      value={newPortfolioName}
+                      onChange={(e) => setNewPortfolioName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), createPortfolio())}
+                      placeholder="Portfolio name"
+                      data-testid="portfolio-new-input"
+                      className="gs-input text-xs flex-1"
+                      style={{ padding: "6px 10px" }}
+                    />
+                    <button
+                      onClick={createPortfolio}
+                      disabled={creatingP || !newPortfolioName.trim()}
+                      data-testid="portfolio-create"
+                      className="rounded-lg px-2 gs-btn-primary disabled:opacity-50"
+                      style={{ padding: "6px 10px" }}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={share}
+            disabled={sharing || !data}
+            data-testid="share-snapshot-btn"
+            className="rounded-full px-4 py-2.5 text-sm border border-[color:var(--line)] bg-[color:var(--bg-2)] text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] flex items-center gap-2 transition disabled:opacity-60"
+          >
+            {sharing ? <Loader2 className="animate-spin" size={14} /> : <Share2 size={14} />}
+            {sharing ? "Sharing..." : "Share"}
+          </button>
+
           <button
             onClick={exportPdf}
             disabled={exporting || !data}
@@ -122,6 +287,27 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {shareLink && (
+        <div className="gs-card p-3 mb-6 flex items-center gap-3" data-testid="share-link-card">
+          <Share2 size={14} className="text-[color:var(--brand-3)]" />
+          <span className="text-[10px] font-mono text-[color:var(--ink-3)]">READ-ONLY LINK · EXPIRES IN 14D</span>
+          <code className="text-xs text-[color:var(--ink)] truncate flex-1">{shareLink}</code>
+          <button
+            onClick={() => { navigator.clipboard.writeText(shareLink); toast.success("Copied"); }}
+            className="p-1.5 rounded-lg hover:bg-[color:var(--brand-tint)] text-[color:var(--ink-3)] hover:text-[color:var(--brand-3)]"
+            data-testid="share-copy"
+          >
+            <Copy size={14} />
+          </button>
+          <button
+            onClick={() => setShareLink("")}
+            className="p-1.5 rounded-lg hover:bg-[color:var(--bg-3)] text-[color:var(--ink-3)]"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-[color:var(--ink-3)] text-sm">Loading intelligence...</div>
