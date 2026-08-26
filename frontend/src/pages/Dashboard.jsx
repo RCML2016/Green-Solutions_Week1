@@ -16,7 +16,6 @@ export default function Dashboard() {
   const captureRef = useRef(null);
   const [exporting, setExporting] = useState(false);
 
-  // AI panel imperative handle for anomaly injection
   const aiPanelRef = useRef(null);
   const seenHighSevRef = useRef(new Set());
   const firstLoadRef = useRef(true);
@@ -29,7 +28,6 @@ export default function Dashboard() {
         const { data: fresh } = await api.get("/portfolio/metrics");
         if (!mounted) return;
 
-        // --- Anomaly detection: new high-severity findings ---
         const currentHigh = fresh.findings.filter((f) => f.severity === "high").map((f) => f.code);
         if (firstLoadRef.current) {
           currentHigh.forEach((c) => seenHighSevRef.current.add(c));
@@ -49,20 +47,18 @@ export default function Dashboard() {
         setData(fresh);
         setPulse(true);
         setTimeout(() => mounted && setPulse(false), 700);
-      } catch { /* ignore */ }
-      finally {
-        if (mounted) setLoading(false);
-      }
+      } catch {}
+      finally { if (mounted) setLoading(false); }
     };
     fetchOnce();
     timer = setInterval(fetchOnce, REFRESH_MS);
     return () => { mounted = false; clearInterval(timer); };
   }, []);
 
-  const sevColor = {
-    high: "text-red-300 bg-red-500/10 border-red-500/20",
-    medium: "text-amber-300 bg-amber-500/10 border-amber-500/20",
-    low: "text-[#6dfcb2] bg-[#22d17a]/10 border-[#22d17a]/20",
+  const sevStyle = {
+    high: { color: "#b91c1c", background: "#fee2e2", border: "#fecaca" },
+    medium: { color: "#b45309", background: "#fef3c7", border: "#fde68a" },
+    low: { color: "#065f46", background: "#d1fae5", border: "#a7f3d0" },
   };
 
   const exportPdf = async () => {
@@ -70,22 +66,19 @@ export default function Dashboard() {
     setExporting(true);
     try {
       const canvas = await html2canvas(captureRef.current, {
-        backgroundColor: "#062015", scale: 2, useCORS: true,
+        backgroundColor: "#f4f7f0", scale: 2, useCORS: true,
       });
       const img = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
       const pageW = pdf.internal.pageSize.getWidth();
       const imgH = (canvas.height * pageW) / canvas.width;
-      pdf.setFillColor(6, 32, 21);
+      pdf.setFillColor(244, 247, 240);
       pdf.rect(0, 0, pageW, pdf.internal.pageSize.getHeight(), "F");
       pdf.addImage(img, "PNG", 0, 0, pageW, imgH);
       pdf.save(`green-solutions-dashboard-${new Date().toISOString().slice(0, 10)}.pdf`);
       toast.success("Report exported");
-    } catch {
-      toast.error("Export failed");
-    } finally {
-      setExporting(false);
-    }
+    } catch { toast.error("Export failed"); }
+    finally { setExporting(false); }
   };
 
   return (
@@ -95,10 +88,10 @@ export default function Dashboard() {
           <div className="eyebrow flex items-center gap-2">
             <span className={`pulse-dot ${pulse ? "opacity-100" : "opacity-90"}`} /> LIVE INTELLIGENCE · POLL {REFRESH_MS / 1000}s
           </div>
-          <h1 className="font-display text-3xl md:text-4xl mt-3">
-            Welcome, <span className="text-[#22d17a]">{user?.name?.split(" ")[0] || "Operator"}</span>.
+          <h1 className="font-display text-3xl md:text-4xl mt-3 text-[color:var(--ink)]">
+            Welcome, <span className="text-[color:var(--brand-3)]">{user?.name?.split(" ")[0] || "Operator"}</span>.
           </h1>
-          <p className="text-white/55 text-sm mt-2">
+          <p className="text-[color:var(--ink-3)] text-sm mt-2">
             Portfolio intelligence and AI findings — streaming from the intelligence pipeline.
           </p>
         </div>
@@ -107,7 +100,7 @@ export default function Dashboard() {
             onClick={exportPdf}
             disabled={exporting || !data}
             data-testid="export-pdf-btn"
-            className="rounded-full px-5 py-2.5 text-sm font-semibold bg-[#22d17a] text-[#062015] hover:bg-[#6dfcb2] transition disabled:opacity-60 flex items-center gap-2"
+            className="gs-btn-primary text-sm disabled:opacity-60"
           >
             {exporting ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
             {exporting ? "Exporting..." : "Export Report"}
@@ -116,7 +109,7 @@ export default function Dashboard() {
       </div>
 
       {loading ? (
-        <div className="text-white/50 text-sm">Loading intelligence...</div>
+        <div className="text-[color:var(--ink-3)] text-sm">Loading intelligence...</div>
       ) : data ? (
         <div className="grid lg:grid-cols-[1fr_380px] gap-6">
           <div ref={captureRef}>
@@ -127,57 +120,60 @@ export default function Dashboard() {
                 { l: "AI CONFIDENCE", v: `${data.ai_confidence}%`, d: "Portfolio avg.", i: Sparkles },
                 { l: "ENERGY 24H", v: `${data.energy_last_24h_mwh} MWh`, d: `${data.assets_online}/${data.assets_total} online`, i: Zap },
               ].map((k) => (
-                <div key={k.l} className="rounded-2xl bg-[#0a2e1e] border border-white/5 p-5 transition" data-testid={`kpi-${k.l.toLowerCase().replace(/\s+/g, "-")}`}>
-                  <div className="flex items-center justify-between text-[10px] font-mono text-white/50">
+                <div key={k.l} className="gs-card p-5" data-testid={`kpi-${k.l.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[color:var(--ink-3)]">
                     <span>{k.l}</span>
-                    <k.i size={14} className="text-[#6dfcb2]" />
+                    <k.i size={14} className="text-[color:var(--brand-3)]" />
                   </div>
-                  <div className={`font-display text-3xl mt-3 transition ${pulse ? "text-[#6dfcb2]" : "text-white"}`}>{k.v}</div>
-                  <div className="text-[11px] text-[#6dfcb2] mt-1">{k.d}</div>
+                  <div className={`font-display text-3xl mt-3 transition ${pulse ? "text-[color:var(--brand-3)]" : "text-[color:var(--ink)]"}`}>{k.v}</div>
+                  <div className="text-[11px] text-[color:var(--brand-3)] mt-1">{k.d}</div>
                 </div>
               ))}
             </div>
 
-            <div className="rounded-2xl bg-[#0a2e1e] border border-white/5 p-6 mt-6">
+            <div className="gs-card p-6 mt-6">
               <div className="flex items-center justify-between">
-                <div className="font-mono text-[10px] text-white/50">ENERGY PERFORMANCE · LAST 24H</div>
-                <span className="text-[11px] font-mono text-[#6dfcb2] border border-[#22d17a]/40 rounded-full px-3 py-1">AI MONITORING</span>
+                <div className="font-mono text-[10px] text-[color:var(--ink-3)]">ENERGY PERFORMANCE · LAST 24H</div>
+                <span className="text-[11px] font-mono text-[color:var(--brand-3)] border border-[color:var(--brand)] bg-[color:var(--brand-tint)] rounded-full px-3 py-1">AI MONITORING</span>
               </div>
               <svg viewBox="0 0 600 180" className="w-full h-56 mt-4">
                 <defs>
-                  <linearGradient id="dashg" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#22d17a" stopOpacity="0.55" />
-                    <stop offset="100%" stopColor="#22d17a" stopOpacity="0" />
+                  <linearGradient id="dash-light" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 {[40, 80, 120, 160].map((y) => (
-                  <line key={y} x1="0" x2="600" y1={y} y2={y} stroke="rgba(255,255,255,0.05)" />
+                  <line key={y} x1="0" x2="600" y1={y} y2={y} stroke="#eaefe4" />
                 ))}
-                <path d="M0,140 C50,130 90,110 140,95 C190,80 230,90 280,70 C330,50 380,60 430,45 C480,30 530,35 600,20 L600,180 L0,180 Z" fill="url(#dashg)" />
-                <path d="M0,140 C50,130 90,110 140,95 C190,80 230,90 280,70 C330,50 380,60 430,45 C480,30 530,35 600,20" fill="none" stroke="#22d17a" strokeWidth="2" />
+                <path d="M0,140 C50,130 90,110 140,95 C190,80 230,90 280,70 C330,50 380,60 430,45 C480,30 530,35 600,20 L600,180 L0,180 Z" fill="url(#dash-light)" />
+                <path d="M0,140 C50,130 90,110 140,95 C190,80 230,90 280,70 C330,50 380,60 430,45 C480,30 530,35 600,20" fill="none" stroke="#10b981" strokeWidth="2.2" />
               </svg>
             </div>
 
-            <div className="rounded-2xl bg-[#0a2e1e] border border-white/5 p-6 mt-6">
+            <div className="gs-card p-6 mt-6">
               <div className="flex items-center justify-between">
-                <div className="font-mono text-[10px] text-white/50">AI PRIORITY FINDINGS</div>
-                <AlertTriangle size={14} className="text-amber-300" />
+                <div className="font-mono text-[10px] text-[color:var(--ink-3)]">AI PRIORITY FINDINGS</div>
+                <AlertTriangle size={14} className="text-[color:var(--amber)]" />
               </div>
-              <div className="mt-3 divide-y divide-white/5">
+              <div className="mt-3 divide-y divide-[color:var(--line-2)]">
                 {data.findings.map((f) => (
                   <div key={f.code} className="py-3 flex items-center gap-3" data-testid={`finding-${f.code}`}>
-                    <span className="font-mono text-[10px] text-[#6dfcb2]">{f.code}</span>
+                    <span className="font-mono text-[10px] text-[color:var(--brand-3)]">{f.code}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white/90 truncate">{f.title}</div>
-                      <div className={`inline-block mt-1 text-[10px] font-mono border rounded-full px-2 py-0.5 ${sevColor[f.severity]}`}>
+                      <div className="text-sm text-[color:var(--ink)] truncate">{f.title}</div>
+                      <span
+                        className="inline-block mt-1 text-[10px] font-mono border rounded-full px-2 py-0.5"
+                        style={{ color: sevStyle[f.severity].color, background: sevStyle[f.severity].background, borderColor: sevStyle[f.severity].border }}
+                      >
                         {f.severity.toUpperCase()}
-                      </div>
+                      </span>
                     </div>
-                    <span className="font-mono text-xs text-white/70">{f.confidence}%</span>
+                    <span className="font-mono text-xs text-[color:var(--ink-2)]">{f.confidence}%</span>
                     <button
                       onClick={() => aiPanelRef.current?.askAbout(f.code, f.title)}
                       data-testid={`ask-ai-${f.code}`}
-                      className="text-[10px] font-mono px-2 py-1 rounded-full border border-white/10 hover:border-[#22d17a]/60 hover:text-[#6dfcb2] transition"
+                      className="text-[10px] font-mono px-2 py-1 rounded-full border border-[color:var(--line)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition"
                     >
                       ASK AI
                     </button>
@@ -190,16 +186,16 @@ export default function Dashboard() {
           <AiInsightPanel ref={aiPanelRef} findings={data.findings} />
         </div>
       ) : (
-        <div className="text-white/50 text-sm">Unable to load metrics.</div>
+        <div className="text-[color:var(--ink-3)] text-sm">Unable to load metrics.</div>
       )}
     </div>
   );
 }
 
-/* --------------------- AI Insight Panel (with History) --------------------- */
+/* --------------------- AI Insight Panel (light) --------------------- */
 
 const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
-  const [tab, setTab] = useState("chat"); // "chat" | "history"
+  const [tab, setTab] = useState("chat");
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [q, setQ] = useState("");
@@ -215,12 +211,9 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
 
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
-    try {
-      const { data } = await api.get("/ai/sessions");
-      setSessions(data);
-    } catch {} finally { setLoadingSessions(false); }
+    try { const { data } = await api.get("/ai/sessions"); setSessions(data); }
+    catch {} finally { setLoadingSessions(false); }
   }, []);
-
   useEffect(() => { if (tab === "history") loadSessions(); }, [tab, loadSessions]);
 
   const openSession = async (id) => {
@@ -229,9 +222,8 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
       setSessionId(id);
       setMessages(data.messages.map((m) => ({ role: m.role, text: m.text, finding: m.finding_code, auto: m.auto })));
       setTab("chat");
-    } catch (e) { toast.error("Failed to load session"); }
+    } catch { toast.error("Failed to load session"); }
   };
-
   const removeSession = async (id, e) => {
     e.stopPropagation();
     if (!window.confirm("Delete this conversation?")) return;
@@ -242,14 +234,7 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
       toast.success("Deleted");
     } catch { toast.error("Delete failed"); }
   };
-
-  const newSession = () => {
-    setSessionId(null);
-    setMessages([]);
-    setSelected("");
-    setQ("");
-    setTab("chat");
-  };
+  const newSession = () => { setSessionId(null); setMessages([]); setSelected(""); setQ(""); setTab("chat"); };
 
   const streamAsk = async (question, findingCode, auto = false) => {
     setStreaming(true);
@@ -301,43 +286,37 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
         copy[copy.length - 1] = { ...copy[copy.length - 1], text: "⚠ Assistant unavailable. Try again." };
         return copy;
       });
-    } finally {
-      setStreaming(false);
-    }
+    } finally { setStreaming(false); }
   };
 
   const ask = () => {
     if (!q.trim() || streaming) return;
-    const question = q;
-    setQ("");
+    const question = q; setQ("");
     streamAsk(question, selected);
   };
 
-  // Imperative handles used by parent Dashboard for auto-alerts and quick ask
   useImperativeHandle(ref, () => ({
     askAbout: (code, title) => {
-      setTab("chat");
-      setSelected(code);
+      setTab("chat"); setSelected(code);
       streamAsk(`Explain ${code} (${title}) and what I should do next.`, code, false);
     },
     autoAsk: (code, title) => {
-      setTab("chat");
-      setSelected(code);
+      setTab("chat"); setSelected(code);
       streamAsk(`ALERT — a new high-severity finding just appeared: ${code} · ${title}. Give me a 2-sentence root cause and one action.`, code, true);
     },
   }));
 
   return (
-    <aside className="rounded-2xl bg-[#04180f] border border-white/5 flex flex-col h-fit lg:sticky lg:top-24" data-testid="ai-insight-panel">
-      <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-[#22d17a]/15 text-[#6dfcb2] flex items-center justify-center">
+    <aside className="gs-card flex flex-col h-fit lg:sticky lg:top-24" data-testid="ai-insight-panel">
+      <div className="px-5 py-4 border-b border-[color:var(--line-2)] flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-[color:var(--brand-tint)] text-[color:var(--brand-3)] flex items-center justify-center">
           <Bot size={16} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium">AI Insight Assistant</div>
-          <div className="text-[10px] font-mono text-white/40">CLAUDE SONNET 5 · EXPLAINABLE</div>
+          <div className="text-sm font-medium text-[color:var(--ink)]">AI Insight Assistant</div>
+          <div className="text-[10px] font-mono text-[color:var(--ink-3)]">CLAUDE SONNET 5 · EXPLAINABLE</div>
         </div>
-        <button onClick={newSession} title="New chat" data-testid="ai-new-session" className="p-1.5 rounded-lg hover:bg-white/5 text-white/60 hover:text-[#6dfcb2]">
+        <button onClick={newSession} title="New chat" data-testid="ai-new-session" className="p-1.5 rounded-lg hover:bg-[color:var(--brand-tint)] text-[color:var(--ink-3)] hover:text-[color:var(--brand-3)]">
           <MessageSquarePlus size={14} />
         </button>
       </div>
@@ -351,7 +330,7 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
             key={t.id}
             onClick={() => setTab(t.id)}
             data-testid={`ai-tab-${t.id}`}
-            className={`flex items-center gap-1.5 text-[11px] font-mono px-3 py-1.5 rounded-full transition ${tab === t.id ? "bg-[#22d17a]/15 text-[#6dfcb2]" : "text-white/50 hover:text-white/80"}`}
+            className={`flex items-center gap-1.5 text-[11px] font-mono px-3 py-1.5 rounded-full transition ${tab === t.id ? "bg-[color:var(--brand-tint)] text-[color:var(--brand-3)]" : "text-[color:var(--ink-3)] hover:text-[color:var(--ink)]"}`}
           >
             <t.icon size={12} /> {t.label.toUpperCase()}
           </button>
@@ -362,28 +341,37 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
         <>
           <div ref={scrollRef} className="p-5 space-y-3 max-h-[420px] overflow-y-auto min-h-[240px]">
             {messages.length === 0 && (
-              <div className="text-xs text-white/50 leading-relaxed">
-                Ask about any finding or metric. When a new high-severity finding appears, I'll auto-alert here with <Bell size={11} className="inline text-amber-300 -mt-0.5" /> and suggest an action.
+              <div className="text-xs text-[color:var(--ink-3)] leading-relaxed">
+                Ask about any finding or metric. When a new high-severity finding appears, I'll auto-alert here with <Bell size={11} className="inline text-[color:var(--amber)] -mt-0.5" /> and suggest an action.
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`text-sm ${m.role === "user" ? "text-white/90" : "text-white/75"}`}>
-                <div className="text-[10px] font-mono text-white/40 mb-1 flex items-center gap-1.5">
-                  {m.auto && <Bell size={11} className="text-amber-300" />}
+              <div key={i} className="text-sm">
+                <div className="text-[10px] font-mono text-[color:var(--ink-3)] mb-1 flex items-center gap-1.5">
+                  {m.auto && <Bell size={11} className="text-[color:var(--amber)]" />}
                   {m.role === "user" ? (m.auto ? "AUTO-ALERT" : "YOU") : "ASSISTANT"}{m.finding ? ` · ${m.finding}` : ""}
                 </div>
-                <div className={`rounded-xl px-3 py-2 whitespace-pre-wrap ${m.role === "user" ? (m.auto ? "bg-amber-500/5 border border-amber-500/20" : "bg-white/[0.04] border border-white/5") : "bg-[#22d17a]/10 border border-[#22d17a]/20"}`}>
+                <div
+                  className="rounded-xl px-3 py-2 whitespace-pre-wrap border"
+                  style={
+                    m.role === "user"
+                      ? m.auto
+                        ? { color: "#8a5a00", background: "var(--amber-tint)", borderColor: "#fde68a" }
+                        : { color: "var(--ink)", background: "#f6f8f2", borderColor: "var(--line-2)" }
+                      : { color: "var(--ink)", background: "var(--brand-tint)", borderColor: "#c9ebd7" }
+                  }
+                >
                   {m.text || (streaming && i === messages.length - 1 ? "…" : "")}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="p-4 border-t border-white/5 space-y-2">
+          <div className="p-4 border-t border-[color:var(--line-2)] space-y-2">
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => setSelected("")}
-                className={`text-[10px] font-mono px-2 py-1 rounded-full border ${!selected ? "border-[#22d17a] text-[#6dfcb2]" : "border-white/10 text-white/50"}`}
+                className={`text-[10px] font-mono px-2 py-1 rounded-full border ${!selected ? "border-[color:var(--brand)] text-[color:var(--brand-3)] bg-[color:var(--brand-tint)]" : "border-[color:var(--line)] text-[color:var(--ink-3)]"}`}
               >
                 GENERAL
               </button>
@@ -391,7 +379,7 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
                 <button
                   key={f.code}
                   onClick={() => setSelected(f.code)}
-                  className={`text-[10px] font-mono px-2 py-1 rounded-full border ${selected === f.code ? "border-[#22d17a] text-[#6dfcb2]" : "border-white/10 text-white/50"}`}
+                  className={`text-[10px] font-mono px-2 py-1 rounded-full border ${selected === f.code ? "border-[color:var(--brand)] text-[color:var(--brand-3)] bg-[color:var(--brand-tint)]" : "border-[color:var(--line)] text-[color:var(--ink-3)]"}`}
                   data-testid={`ai-context-${f.code}`}
                 >
                   {f.code}
@@ -405,13 +393,14 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
                 onKeyDown={(e) => e.key === "Enter" && ask()}
                 data-testid="ai-input"
                 placeholder="Ask about a finding..."
-                className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#22d17a] text-white"
+                className="gs-input flex-1"
               />
               <button
                 onClick={ask}
                 disabled={streaming || !q.trim()}
                 data-testid="ai-send"
-                className="rounded-xl px-3 bg-[#22d17a] text-[#062015] hover:bg-[#6dfcb2] disabled:opacity-50"
+                className="rounded-xl px-3 gs-btn-primary disabled:opacity-50"
+                style={{ padding: "10px 14px" }}
               >
                 {streaming ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
               </button>
@@ -421,9 +410,9 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
       ) : (
         <div className="p-4" data-testid="ai-history-list">
           {loadingSessions ? (
-            <div className="text-xs text-white/50">Loading history...</div>
+            <div className="text-xs text-[color:var(--ink-3)]">Loading history...</div>
           ) : sessions.length === 0 ? (
-            <div className="text-xs text-white/50">No past conversations yet.</div>
+            <div className="text-xs text-[color:var(--ink-3)]">No past conversations yet.</div>
           ) : (
             <div className="space-y-1 max-h-[420px] overflow-y-auto">
               {sessions.map((s) => (
@@ -431,17 +420,17 @@ const AiInsightPanel = forwardRef(function AiInsightPanel({ findings }, ref) {
                   key={s.id}
                   onClick={() => openSession(s.id)}
                   data-testid={`session-${s.id}`}
-                  className={`w-full text-left rounded-xl border p-3 flex items-start gap-2 hover:border-[#22d17a]/40 transition ${s.id === sessionId ? "border-[#22d17a]/60 bg-[#22d17a]/5" : "border-white/5"}`}
+                  className={`w-full text-left rounded-xl border p-3 flex items-start gap-2 hover:border-[color:var(--brand)] transition ${s.id === sessionId ? "border-[color:var(--brand)] bg-[color:var(--brand-tint)]" : "border-[color:var(--line-2)] bg-white"}`}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white/90 truncate">{s.title || "Untitled chat"}</div>
-                    <div className="text-[10px] font-mono text-white/40 mt-1">
+                    <div className="text-sm text-[color:var(--ink)] truncate">{s.title || "Untitled chat"}</div>
+                    <div className="text-[10px] font-mono text-[color:var(--ink-3)] mt-1">
                       {new Date(s.updated_at).toLocaleString()}
                     </div>
                   </div>
                   <span
                     onClick={(e) => removeSession(s.id, e)}
-                    className="p-1 rounded text-white/40 hover:text-red-300 cursor-pointer"
+                    className="p-1 rounded text-[color:var(--ink-3)] hover:text-[color:var(--coral)] cursor-pointer"
                     data-testid={`session-delete-${s.id}`}
                   >
                     <Trash2 size={13} />

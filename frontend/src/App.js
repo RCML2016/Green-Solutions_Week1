@@ -22,7 +22,7 @@ function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#062015] text-[#eef1ec]">
+      <div className="min-h-screen flex items-center justify-center gs-canvas text-[color:var(--ink)]">
         <div className="pulse-dot" />
       </div>
     );

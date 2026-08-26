@@ -1,4 +1,4 @@
-import { Activity, Sparkles, Workflow, BarChart3 } from "lucide-react";
+import { Activity, Sparkles, Workflow, BarChart3, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const items = [
@@ -10,24 +10,26 @@ const items = [
 
 export default function Solutions() {
   return (
-    <div className="bg-[#eef1ec] text-[#062015] py-16 px-6 lg:px-14 min-h-[80vh]">
+    <div className="bg-white py-16 px-6 lg:px-14 min-h-[80vh]">
       <div className="max-w-[1100px] mx-auto">
         <div className="eyebrow">SOLUTIONS</div>
-        <h1 className="font-display text-4xl md:text-6xl mt-4 leading-[1.05]">
+        <h1 className="font-display text-4xl md:text-6xl mt-4 leading-[1.05] text-[color:var(--ink)]">
           Four outcomes. <br /> One connected intelligence layer.
         </h1>
         <div className="grid md:grid-cols-2 gap-6 mt-14">
           {items.map((s) => (
-            <div key={s.n} className="gs-card-light p-8">
+            <div key={s.n} className="gs-card p-8">
               <div className="flex items-start justify-between">
-                <div className="w-11 h-11 rounded-xl bg-[#22d17a]/15 text-[#0a7a48] flex items-center justify-center">
+                <div className="w-11 h-11 rounded-xl bg-[color:var(--brand-tint)] text-[color:var(--brand-3)] flex items-center justify-center">
                   <s.i size={18} />
                 </div>
-                <span className="font-mono text-[10px] text-[#062015]/40">{s.n}</span>
+                <span className="font-mono text-[10px] text-[color:var(--ink-3)]">{s.n}</span>
               </div>
-              <h3 className="font-display text-2xl mt-8">{s.t}</h3>
-              <p className="text-sm mt-3 text-[#062015]/70">{s.d}</p>
-              <Link to="/dashboard" className="mt-6 inline-flex text-sm text-[#0a7a48] hover:text-[#22d17a]">See it live →</Link>
+              <h3 className="font-display text-2xl mt-8 text-[color:var(--ink)]">{s.t}</h3>
+              <p className="text-sm mt-3 text-[color:var(--ink-2)]">{s.d}</p>
+              <Link to="/dashboard" className="mt-6 inline-flex text-sm text-[color:var(--brand-3)] hover:text-[color:var(--brand)] items-center gap-1">
+                See it live <ArrowRight size={14} />
+              </Link>
             </div>
           ))}
         </div>

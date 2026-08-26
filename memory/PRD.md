@@ -41,6 +41,14 @@
 - **Team Access (RBAC)**: `/api/team/*` admin-only invite (owner/technician/compliance/admin) + list + remove; `Team.jsx` sidebar link is admin-gated; temporary password shown once in UI + backend log.
 - **Report Scheduler**: `/api/reports/schedule` upsert + `/api/reports/preview`; `Reports.jsx` cadence + recipients + toggle + preview (simulated, logged to backend).
 
+## Iteration 4 — Bright, shiny 2026+ theme (2026-02)
+- Global palette pivoted to **cream + emerald + soft glass** (`--bg #f4f7f0`, `--brand #10b981` with gradient shine, warm amber for anomalies).
+- New tokens (`gs-canvas`, `gs-card`, `gs-card-accent`, `gs-btn-primary` with gradient + shadow, `gs-glass`, `gs-input`) in `index.css`.
+- Sidebar + TopBar: white surface with subtle green highlight for active links.
+- Landing: gradient shine hero (mint + amber radial), light glass mock, white/cream section rhythm.
+- Dashboard: light KPI cards, colored severity chips (red/amber/emerald), AI panel on white surface.
+- All auth screens (Login, Register, Forgot, Reset) redesigned with bright-shine accent pane.
+
 ## Prioritized Backlog
 - P1: Real-time metrics WebSocket refresh
 - P1: Password reset flow (forgot / reset)
