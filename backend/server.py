@@ -1,177 +1,72 @@
+"""Green Solutions API — thin entry point.
+
+All domain logic lives under /app/backend/routers/. This file wires the app,
+runs the on-startup seed of the shipped renewable-energy dataset, and mounts
+every APIRouter under the `/api` prefix.
+"""
 from dotenv import load_dotenv
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
 import os
-import logging
 import uuid
-import secrets
-import random
-import json
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+import logging
+from datetime import datetime, timezone
 
-import bcrypt
-import jwt
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, EmailStr, Field
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+
+from deps import db, close_db_client, hash_password, verify_password
+from seed_dataset import seed_if_empty
+from routers.auth import router as auth_router
+from routers.ai import router as ai_router
+from routers.core import router as core_router
+from routers.fleet import router as fleet_router
 
 
-# --- Config ---
-JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_MINUTES = 60 * 24  # 24h for demo simplicity
-
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 app = FastAPI(title="Green Solutions API")
+
 api_router = APIRouter(prefix="/api")
 
 
-# --- Helpers ---
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+@api_router.get("/")
+async def root():
+    return {"message": "Green Solutions API"}
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+@api_router.get("/healthz")
+async def healthz():
+    fleet_sites = await db.fleet_sites.estimated_document_count()
+    return {"ok": True, "fleet_sites": fleet_sites, "time": datetime.now(timezone.utc).isoformat()}
 
 
-def create_access_token(user_id: str, email: str) -> str:
-    payload = {
-        "sub": user_id,
-        "email": email,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
-        "type": "access",
-    }
-    return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALGORITHM)
+# Mount domain routers
+api_router.include_router(auth_router)
+api_router.include_router(ai_router)
+api_router.include_router(core_router)
+api_router.include_router(fleet_router)
+
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=False,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-async def get_current_user(request: Request) -> dict:
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else None
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, os.environ["JWT_SECRET"], algorithms=[JWT_ALGORITHM])
-        if payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-
-# --- Models ---
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
-    name: str = Field(min_length=1, max_length=80)
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class ContactRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    email: EmailStr
-    message: str = Field(min_length=1, max_length=2000)
-
-
-class ForgotRequest(BaseModel):
-    email: EmailStr
-
-
-class ResetRequest(BaseModel):
-    token: str
-    new_password: str = Field(min_length=6, max_length=128)
-
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str = Field(min_length=6, max_length=128)
-
-
-class InsightRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=500)
-    finding_code: Optional[str] = None
-    session_id: Optional[str] = None
-    auto: Optional[bool] = False
-
-
-class SessionCreateRequest(BaseModel):
-    title: Optional[str] = Field(default=None, max_length=120)
-
-
-class InviteRequest(BaseModel):
-    email: EmailStr
-    name: str = Field(min_length=1, max_length=80)
-    role: str = Field(pattern="^(owner|technician|compliance|admin)$")
-
-
-class ScheduleRequest(BaseModel):
-    frequency: str = Field(pattern="^(daily|weekly|monthly)$")
-    recipients: List[EmailStr]
-    enabled: bool = True
-
-
-class PortfolioCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    region: Optional[str] = Field(default=None, max_length=60)
-
-
-class AlertCreate(BaseModel):
-    code: str = Field(min_length=1, max_length=40)
-    title: str = Field(min_length=1, max_length=200)
-    severity: str = Field(pattern="^(high|medium|low)$")
-    confidence: int = Field(ge=0, le=100)
-    portfolio_id: Optional[str] = None
-
-
-class BrandingRequest(BaseModel):
-    company_name: str = Field(default="", max_length=80)
-    cover_note: str = Field(default="", max_length=500)
-    logo_data_url: str = Field(default="", max_length=200000)  # base64 data URL up to ~150KB
-
-
-class SnapshotCreate(BaseModel):
-    portfolio_id: Optional[str] = None
-    title: Optional[str] = Field(default=None, max_length=120)
-
-
-class ActionCreate(BaseModel):
-    finding_code: str = Field(min_length=1, max_length=40)
-    finding_title: str = Field(min_length=1, max_length=200)
-    action_text: str = Field(min_length=1, max_length=500)
-
-
-# --- Login rate limiting (in-memory best-effort; Mongo-backed for durability) ---
-LOGIN_MAX_ATTEMPTS = 5
-LOGIN_LOCK_MINUTES = 15
-
-
-def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
-
-
-# --- Startup ---
 @app.on_event("startup")
 async def startup():
+    # Indexes
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
@@ -186,6 +81,7 @@ async def startup():
     await db.branding.create_index("user_id", unique=True)
     await db.actions.create_index([("user_id", 1), ("created_at", -1)])
     await db.login_attempts.create_index("identifier")
+
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@greensolutions.ai").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
@@ -205,689 +101,14 @@ async def startup():
             {"$set": {"password_hash": hash_password(admin_password)}},
         )
 
-
-# --- Routes ---
-@api_router.get("/")
-async def root():
-    return {"message": "Green Solutions API"}
-
-
-@api_router.post("/auth/register")
-async def register(payload: RegisterRequest):
-    email = payload.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user_id = str(uuid.uuid4())
-    doc = {
-        "id": user_id,
-        "email": email,
-        "password_hash": hash_password(payload.password),
-        "name": payload.name,
-        "role": "user",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.users.insert_one(doc)
-    token = create_access_token(user_id, email)
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {"id": user_id, "email": email, "name": payload.name, "role": "user"},
-    }
-
-
-@api_router.post("/auth/login")
-async def login(payload: LoginRequest, request: Request):
-    email = payload.email.lower()
-    identifier = email
-    now = datetime.now(timezone.utc)
-    # Check for existing lock
-    record = await db.login_attempts.find_one({"identifier": identifier})
-    if record and record.get("locked_until"):
-        locked_until = record["locked_until"]
-        if isinstance(locked_until, str):
-            locked_until = datetime.fromisoformat(locked_until)
-        if locked_until.tzinfo is None:
-            locked_until = locked_until.replace(tzinfo=timezone.utc)
-        if now < locked_until:
-            wait_min = int((locked_until - now).total_seconds() / 60) + 1
-            raise HTTPException(
-                status_code=429,
-                detail=f"Too many failed attempts. Try again in ~{wait_min} min.",
-            )
-
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(payload.password, user["password_hash"]):
-        # Record failure
-        attempts = (record.get("count", 0) if record else 0) + 1
-        update = {"count": attempts, "last_failed": now.isoformat()}
-        if attempts >= LOGIN_MAX_ATTEMPTS:
-            update["locked_until"] = (now + timedelta(minutes=LOGIN_LOCK_MINUTES)).isoformat()
-            update["count"] = 0  # reset counter once locked
-        await db.login_attempts.update_one(
-            {"identifier": identifier},
-            {"$set": update, "$setOnInsert": {"identifier": identifier}},
-            upsert=True,
-        )
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    # Success — clear attempts
-    await db.login_attempts.delete_one({"identifier": identifier})
-    token = create_access_token(user["id"], email)
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user["id"],
-            "email": user["email"],
-            "name": user["name"],
-            "role": user.get("role", "user"),
-        },
-    }
-
-
-@api_router.get("/auth/me")
-async def me(user: dict = Depends(get_current_user)):
-    return user
-
-
-@api_router.post("/contact")
-async def contact(payload: ContactRequest):
-    doc = {
-        "id": str(uuid.uuid4()),
-        "name": payload.name,
-        "email": payload.email.lower(),
-        "message": payload.message,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.contact_messages.insert_one(doc)
-    return {"ok": True, "message": "Thanks — we'll be in touch soon."}
-
-
-@api_router.get("/portfolio/metrics")
-async def portfolio_metrics(portfolio_id: Optional[str] = None, user: dict = Depends(get_current_user)):
-    # Optionally scope to a specific portfolio (varies confidence baseline slightly)
-    baseline_shift = 0
-    if portfolio_id:
-        p = await db.portfolios.find_one({"id": portfolio_id, "user_id": user["id"]})
-        if not p:
-            raise HTTPException(status_code=404, detail="Portfolio not found")
-        # deterministic shift per portfolio so different portfolios feel different
-        baseline_shift = (sum(ord(c) for c in portfolio_id) % 7) - 3
-
-    def jitter(base, spread=1.5, lo=None, hi=None):
-        v = base + baseline_shift + random.uniform(-spread, spread)
-        if lo is not None: v = max(lo, v)
-        if hi is not None: v = min(hi, v)
-        return round(v, 1)
-
-    base_findings = [
-        {"code": "INV-04", "title": "Communication Dropout", "severity": "high", "base_conf": 91},
-        {"code": "INV-01", "title": "String Underperformance", "severity": "high", "base_conf": 83},
-        {"code": "INV-07", "title": "Thermal Drift", "severity": "medium", "base_conf": 72},
-        {"code": "INV-12", "title": "Soiling Anomaly", "severity": "medium", "base_conf": 68},
-    ]
-    # ~15% chance a fresh high-severity anomaly rotates into the top-4 list —
-    # this makes the client-side Anomaly Auto-Alert flow demoable.
-    rotating_pool = [
-        {"code": "INV-09", "title": "Grid Curtailment Event", "severity": "high", "base_conf": 88},
-        {"code": "STR-22", "title": "String Ground Fault", "severity": "high", "base_conf": 94},
-        {"code": "INV-15", "title": "IGBT Overtemperature", "severity": "high", "base_conf": 87},
-        {"code": "INV-03", "title": "DC Arc Detected", "severity": "high", "base_conf": 96},
-    ]
-    if random.random() < 0.15:
-        swap_in = random.choice(rotating_pool)
-        # replace a medium-severity slot so we always have exactly 4 items
-        base_findings = base_findings[:3] + [swap_in]
-    findings = [
-        {"code": f["code"], "title": f["title"], "severity": f["severity"],
-         "confidence": max(1, min(99, int(f["base_conf"] + random.uniform(-2, 2))))}
-        for f in base_findings
-    ]
-    high_count = sum(1 for f in findings if f["severity"] == "high")
-    return {
-        "portfolio_health": jitter(80, 1.2, 60, 99),
-        "portfolio_health_change": jitter(4.2, 0.6, -2, 8),
-        "ai_findings": len(findings),
-        "high_priority_findings": high_count,
-        "ai_confidence": jitter(84, 1.5, 60, 99),
-        "assets_online": 128 + random.randint(-1, 1),
-        "assets_total": 132,
-        "energy_last_24h_mwh": jitter(2148.6, 12, 1900, 2400),
-        "findings": findings,
-        "server_time": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-@api_router.post("/auth/forgot-password")
-async def forgot_password(payload: ForgotRequest):
-    email = payload.email.lower()
-    user = await db.users.find_one({"email": email})
-    # Always return same response to avoid user enumeration
-    if user:
-        token = secrets.token_urlsafe(32)
-        await db.password_reset_tokens.insert_one({
-            "token": token,
-            "user_id": user["id"],
-            "email": email,
-            "used": False,
-            "created_at": datetime.now(timezone.utc),
-            "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-        })
-        frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
-        reset_link = f"{frontend_url}/reset-password?token={token}"
-        logging.info(f"[PASSWORD RESET] Link for {email}: {reset_link}")
-        return {"ok": True, "message": "If an account exists, a reset link has been generated.", "demo_reset_link": reset_link}
-    return {"ok": True, "message": "If an account exists, a reset link has been generated.", "demo_reset_link": None}
-
-
-@api_router.post("/auth/reset-password")
-async def reset_password(payload: ResetRequest):
-    record = await db.password_reset_tokens.find_one({"token": payload.token})
-    if not record:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
-    if record.get("used"):
-        raise HTTPException(status_code=400, detail="This reset link has already been used")
-    expires = record["expires_at"]
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if datetime.now(timezone.utc) > expires:
-        raise HTTPException(status_code=400, detail="This reset link has expired")
-    await db.users.update_one(
-        {"id": record["user_id"]},
-        {"$set": {"password_hash": hash_password(payload.new_password)}},
-    )
-    await db.password_reset_tokens.update_one(
-        {"token": payload.token},
-        {"$set": {"used": True}},
-    )
-    return {"ok": True, "message": "Password updated. You can sign in now."}
-
-
-@api_router.post("/auth/change-password")
-async def change_password(payload: ChangePasswordRequest, user: dict = Depends(get_current_user)):
-    record = await db.users.find_one({"id": user["id"]})
-    if not record:
-        raise HTTPException(status_code=404, detail="User not found")
-    if not verify_password(payload.current_password, record["password_hash"]):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    if payload.current_password == payload.new_password:
-        raise HTTPException(status_code=400, detail="New password must differ from current password")
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$set": {"password_hash": hash_password(payload.new_password)}},
-    )
-    return {"ok": True, "message": "Password updated."}
-
-
-@api_router.post("/ai/insight")
-async def ai_insight(payload: InsightRequest, user: dict = Depends(get_current_user)):
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="AI service not configured")
-
-    # Resolve/create session
-    session_id = payload.session_id
-    if not session_id:
-        session_id = str(uuid.uuid4())
-        default_title = payload.question[:60] + ("…" if len(payload.question) > 60 else "")
-        await db.ai_sessions.insert_one({
-            "id": session_id,
-            "user_id": user["id"],
-            "title": default_title,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        })
-    else:
-        # verify ownership
-        sess = await db.ai_sessions.find_one({"id": session_id, "user_id": user["id"]})
-        if not sess:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-    # Store user message
-    await db.ai_messages.insert_one({
-        "id": str(uuid.uuid4()),
-        "session_id": session_id,
-        "role": "user",
-        "text": payload.question,
-        "finding_code": payload.finding_code,
-        "auto": bool(payload.auto),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-
-    context = ""
-    if payload.finding_code:
-        context = (
-            f"\nThe operator is asking about finding {payload.finding_code}. "
-            "Include severity, likely root cause, and one recommended action."
-        )
-    if payload.auto:
-        context += "\nThis alert was auto-triggered because a new high-severity finding just appeared. Be brief and actionable."
-
-    system = (
-        "You are the Green Solutions AI Insight Assistant — an explainable AI for renewable "
-        "energy operations. Answer concisely (max 5 short sentences). Ground answers in solar/wind "
-        "operations: inverters, strings, soiling, thermal drift, communication dropouts, curtailment. "
-        "When you make a recommendation, prefix it with 'Action:'. Never invent SLAs or financials."
-    )
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"insight-{session_id}",
-        system_message=system,
-    ).with_model("anthropic", "claude-sonnet-5")
-
-    user_msg = UserMessage(text=payload.question + context)
-
-    async def gen():
-        full_text = ""
-        try:
-            # emit session id first
-            yield f"data: {json.dumps({'session_id': session_id})}\n\n"
-            async for ev in chat.stream_message(user_msg):
-                if isinstance(ev, TextDelta):
-                    full_text += ev.content
-                    yield f"data: {json.dumps({'delta': ev.content})}\n\n"
-                elif isinstance(ev, StreamDone):
-                    yield f"data: {json.dumps({'done': True})}\n\n"
-                    break
-        except Exception as e:
-            logging.exception("AI insight error")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        finally:
-            if full_text:
-                await db.ai_messages.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "session_id": session_id,
-                    "role": "assistant",
-                    "text": full_text,
-                    "finding_code": payload.finding_code,
-                    "auto": bool(payload.auto),
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                })
-                await db.ai_sessions.update_one(
-                    {"id": session_id},
-                    {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
-                )
-
-    return StreamingResponse(
-        gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@api_router.get("/ai/sessions")
-async def list_ai_sessions(user: dict = Depends(get_current_user)):
-    cursor = db.ai_sessions.find(
-        {"user_id": user["id"]}, {"_id": 0}
-    ).sort("updated_at", -1).limit(50)
-    return await cursor.to_list(50)
-
-
-@api_router.get("/ai/sessions/{session_id}")
-async def get_ai_session(session_id: str, user: dict = Depends(get_current_user)):
-    sess = await db.ai_sessions.find_one({"id": session_id, "user_id": user["id"]}, {"_id": 0})
-    if not sess:
-        raise HTTPException(status_code=404, detail="Session not found")
-    msgs = await db.ai_messages.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
-    return {"session": sess, "messages": msgs}
-
-
-@api_router.delete("/ai/sessions/{session_id}")
-async def delete_ai_session(session_id: str, user: dict = Depends(get_current_user)):
-    sess = await db.ai_sessions.find_one({"id": session_id, "user_id": user["id"]})
-    if not sess:
-        raise HTTPException(status_code=404, detail="Session not found")
-    await db.ai_sessions.delete_one({"id": session_id})
-    await db.ai_messages.delete_many({"session_id": session_id})
-    return {"ok": True}
-
-
-# --- Team management (admin only) ---
-@api_router.get("/team/users")
-async def list_team(admin: dict = Depends(require_admin)):
-    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
-    return users
-
-
-@api_router.post("/team/invite")
-async def invite_teammate(payload: InviteRequest, admin: dict = Depends(require_admin)):
-    email = payload.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="A user with that email already exists")
-    temp_password = secrets.token_urlsafe(9)
-    user_id = str(uuid.uuid4())
-    await db.users.insert_one({
-        "id": user_id,
-        "email": email,
-        "password_hash": hash_password(temp_password),
-        "name": payload.name,
-        "role": payload.role,
-        "invited_by": admin["id"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    logging.info(f"[TEAM INVITE] {email} · role={payload.role} · temp password={temp_password}")
-    return {
-        "ok": True,
-        "user": {"id": user_id, "email": email, "name": payload.name, "role": payload.role},
-        "temporary_password": temp_password,
-        "message": "User created. Share the temporary password securely — they should change it on first login.",
-    }
-
-
-@api_router.delete("/team/users/{user_id}")
-async def remove_teammate(user_id: str, admin: dict = Depends(require_admin)):
-    if user_id == admin["id"]:
-        raise HTTPException(status_code=400, detail="You cannot remove yourself")
-    result = await db.users.delete_one({"id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"ok": True}
-
-
-# --- Report Scheduling ---
-@api_router.get("/reports/schedule")
-async def get_report_schedule(user: dict = Depends(get_current_user)):
-    cfg = await db.report_schedules.find_one({"user_id": user["id"]}, {"_id": 0})
-    return cfg or {"user_id": user["id"], "frequency": "weekly", "recipients": [], "enabled": False}
-
-
-@api_router.post("/reports/schedule")
-async def set_report_schedule(payload: ScheduleRequest, user: dict = Depends(get_current_user)):
-    doc = {
-        "user_id": user["id"],
-        "frequency": payload.frequency,
-        "recipients": [r.lower() for r in payload.recipients],
-        "enabled": payload.enabled,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.report_schedules.update_one(
-        {"user_id": user["id"]},
-        {"$set": doc, "$setOnInsert": {"created_at": datetime.now(timezone.utc).isoformat()}},
-        upsert=True,
-    )
-    if payload.enabled:
-        logging.info(
-            f"[REPORT SCHEDULE] user={user['email']} · {payload.frequency} → {payload.recipients}"
-        )
-    return {"ok": True, "schedule": doc}
-
-
-@api_router.post("/reports/preview")
-async def preview_report(user: dict = Depends(get_current_user)):
-    cfg = await db.report_schedules.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
-    recipients = cfg.get("recipients", [])
-    frequency = cfg.get("frequency", "weekly")
-    logging.info(f"[REPORT PREVIEW] Would send {frequency} report to {recipients} for {user['email']}")
-    return {
-        "ok": True,
-        "message": f"Preview logged: would send {frequency} report to {len(recipients)} recipient(s).",
-        "recipients": recipients,
-        "frequency": frequency,
-    }
-
-
-# --- Portfolios ---
-@api_router.get("/portfolios")
-async def list_portfolios(user: dict = Depends(get_current_user)):
-    items = await db.portfolios.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)
-    if not items:
-        # Auto-seed a default portfolio the first time
-        default = {
-            "id": str(uuid.uuid4()),
-            "user_id": user["id"],
-            "name": "Main Renewable Fleet",
-            "region": "Global",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.portfolios.insert_one(default)
-        items = [default]
-        items[0].pop("_id", None)
-    return items
-
-
-@api_router.post("/portfolios")
-async def create_portfolio(payload: PortfolioCreate, user: dict = Depends(get_current_user)):
-    doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        "name": payload.name,
-        "region": payload.region or "",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.portfolios.insert_one(doc)
-    return {k: v for k, v in doc.items() if k != "_id"}
-
-
-@api_router.delete("/portfolios/{portfolio_id}")
-async def delete_portfolio(portfolio_id: str, user: dict = Depends(get_current_user)):
-    res = await db.portfolios.delete_one({"id": portfolio_id, "user_id": user["id"]})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Portfolio not found")
-    return {"ok": True}
-
-
-# --- Alerts ---
-@api_router.get("/alerts")
-async def list_alerts(
-    severity: Optional[str] = None,
-    code: Optional[str] = None,
-    since_hours: int = 168,
-    user: dict = Depends(get_current_user),
-):
-    q = {"user_id": user["id"]}
-    if severity:
-        q["severity"] = severity
-    if code:
-        q["code"] = code
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, min(720, since_hours)))
-    q["created_at"] = {"$gte": cutoff.isoformat()}
-    items = await db.alerts.find(q, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
-    return items
-
-
-@api_router.post("/alerts")
-async def push_alert(payload: AlertCreate, user: dict = Depends(get_current_user)):
-    doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        "code": payload.code,
-        "title": payload.title,
-        "severity": payload.severity,
-        "confidence": payload.confidence,
-        "portfolio_id": payload.portfolio_id,
-        "acknowledged": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.alerts.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-
-@api_router.post("/alerts/{alert_id}/acknowledge")
-async def ack_alert(alert_id: str, user: dict = Depends(get_current_user)):
-    res = await db.alerts.update_one({"id": alert_id, "user_id": user["id"]}, {"$set": {"acknowledged": True}})
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    return {"ok": True}
-
-
-# --- Report branding ---
-@api_router.get("/reports/branding")
-async def get_branding(user: dict = Depends(get_current_user)):
-    cfg = await db.branding.find_one({"user_id": user["id"]}, {"_id": 0})
-    return cfg or {"user_id": user["id"], "company_name": "", "cover_note": "", "logo_data_url": ""}
-
-
-@api_router.post("/reports/branding")
-async def set_branding(payload: BrandingRequest, user: dict = Depends(get_current_user)):
-    doc = {
-        "user_id": user["id"],
-        "company_name": payload.company_name,
-        "cover_note": payload.cover_note,
-        "logo_data_url": payload.logo_data_url,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.branding.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
-    return {"ok": True, "branding": doc}
-
-
-# --- Public snapshots ---
-@api_router.post("/snapshots")
-async def create_snapshot(payload: SnapshotCreate, user: dict = Depends(get_current_user)):
-    # Capture current metrics into an immutable snapshot
-    metrics_resp = await portfolio_metrics(portfolio_id=payload.portfolio_id, user=user)
-    token = secrets.token_urlsafe(16)
-    doc = {
-        "id": str(uuid.uuid4()),
-        "token": token,
-        "user_id": user["id"],
-        "portfolio_id": payload.portfolio_id,
-        "title": payload.title or metrics_resp.get("server_time", "Snapshot"),
-        "metrics": metrics_resp,
-        "created_at": datetime.now(timezone.utc),
-        "expires_at": datetime.now(timezone.utc) + timedelta(days=14),
-    }
-    await db.snapshots.insert_one(doc)
-    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
-    return {
-        "ok": True,
-        "token": token,
-        "url": f"{frontend_url}/s/{token}",
-        "expires_at": doc["expires_at"].isoformat(),
-    }
-
-
-@api_router.get("/public/snapshots/{token}")
-async def get_snapshot(token: str):
-    snap = await db.snapshots.find_one({"token": token}, {"_id": 0, "user_id": 0})
-    if not snap:
-        raise HTTPException(status_code=404, detail="Snapshot not found or expired")
-    for k in ("created_at", "expires_at"):
-        if isinstance(snap.get(k), datetime):
-            snap[k] = snap[k].isoformat()
-    return snap
-
-
-@api_router.get("/snapshots")
-async def list_snapshots(user: dict = Depends(get_current_user)):
-    items = await db.snapshots.find(
-        {"user_id": user["id"]},
-        {"_id": 0, "metrics": 0},
-    ).sort("created_at", -1).limit(200).to_list(200)
-    for it in items:
-        for k in ("created_at", "expires_at"):
-            if isinstance(it.get(k), datetime):
-                it[k] = it[k].isoformat()
-    return items
-
-
-@api_router.delete("/snapshots/{token}")
-async def revoke_snapshot(token: str, user: dict = Depends(get_current_user)):
-    res = await db.snapshots.delete_one({"token": token, "user_id": user["id"]})
-    if res.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Snapshot not found")
-    return {"ok": True}
-
-
-# --- Recommended Actions ---
-@api_router.get("/actions")
-async def list_actions(user: dict = Depends(get_current_user)):
-    items = await db.actions.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
-    return items
-
-
-@api_router.post("/actions")
-async def create_action(payload: ActionCreate, user: dict = Depends(get_current_user)):
-    doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        "finding_code": payload.finding_code,
-        "finding_title": payload.finding_title,
-        "action_text": payload.action_text,
-        "status": "accepted",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.actions.insert_one(doc)
-    doc.pop("_id", None)
-    return doc
-
-
-# --- AI Weekly Digest ---
-@api_router.post("/reports/weekly-digest")
-async def weekly_digest(user: dict = Depends(get_current_user)):
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="AI service not configured")
-
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=168)
-    alerts = await db.alerts.find(
-        {"user_id": user["id"], "created_at": {"$gte": cutoff.isoformat()}},
-        {"_id": 0}
-    ).sort("created_at", -1).limit(100).to_list(100)
-    actions = await db.actions.find(
-        {"user_id": user["id"], "created_at": {"$gte": cutoff.isoformat()}},
-        {"_id": 0}
-    ).sort("created_at", -1).limit(100).to_list(100)
-
-    alerts_summary = "\n".join(
-        f"- {a['code']} · {a['severity'].upper()} · {a['title']} (conf {a['confidence']}%)"
-        for a in alerts[:20]
-    ) or "No alerts this week."
-    actions_summary = "\n".join(
-        f"- {a['finding_code']}: {a['action_text']}" for a in actions[:20]
-    ) or "No accepted actions this week."
-
-    system = (
-        "You are the Green Solutions AI Digest Writer. In 4-6 short sentences, "
-        "summarise the past week for a portfolio owner. Highlight top themes, "
-        "biggest risks, and what got resolved. End with one 'Next week focus:' line. "
-        "Use plain English, no jargon."
-    )
-    user_prompt = (
-        f"WEEKLY ALERTS ({len(alerts)}):\n{alerts_summary}\n\n"
-        f"ACCEPTED ACTIONS ({len(actions)}):\n{actions_summary}"
-    )
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"digest-{user['id']}",
-        system_message=system,
-    ).with_model("anthropic", "claude-sonnet-5")
-
-    text = ""
+    # Seed dataset (idempotent — only runs if fleet_sites is empty)
     try:
-        async for ev in chat.stream_message(UserMessage(text=user_prompt)):
-            if isinstance(ev, TextDelta):
-                text += ev.content
-            elif isinstance(ev, StreamDone):
-                break
-    except Exception as e:
-        logging.exception("Weekly digest failed")
-        raise HTTPException(status_code=502, detail=f"AI digest failed: {e}")
-
-    logging.info(f"[WEEKLY DIGEST] Generated for {user['email']} · {len(text)} chars")
-    return {
-        "ok": True,
-        "digest": text,
-        "alerts_count": len(alerts),
-        "actions_count": len(actions),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=False,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        result = await seed_if_empty(db)
+        logging.info("[STARTUP] Dataset seed status: %s", result)
+    except Exception as e:  # noqa: BLE001
+        logging.exception("[STARTUP] Dataset seed failed: %s", e)
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    close_db_client()

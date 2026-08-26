@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 11 re-test of the 11 iteration-10 bug fixes + full regression. Backend: created /app/backend/tests/test_iteration11.py (27 tests) and re-ran the whole suite — 155/155 pytest tests PASS (0 failures), including the 3 previously-failing bug guards in test_iteration10.py. Verified FIX#1 telemetry now aggregates per timestamp (S00001 hours=24 -> exactly 24 unique sorted rows, real solar diurnal curve 0 -> 1835.82 kW peak -> 0; hours=6 also aggregated; window slides at 6h, offsets differ across a 35s gap; S00378/379/380 now all return 24 rows), FIX#2 kpis?category=DoesNotExist returns every aggregate as 0 while Wind Farm still scopes to 30 sites and no-category returns 380/5473/800, FIX#3 all 4 severities accepted (Low/Medium/High/Critical, Critical total = 38, buckets sum to 800) and invalid/lowercase/empty severity -> 422, FIX#4 work-orders?status=Resolved status_breakdown = [Resolved] only with count == total, FIX#5 alarms?category=Wind Farm -> 232 alarms all on Wind Farm site_ids with root_causes summing to total, unknown category -> total 0, FIX#6 work-orders?category=Wind Farm -> 34 WOs all Wind Farm, unknown category -> 0. Auth regression: login/me OK, admin bcrypt hash starts with $2b$, all fleet endpoints 401 without Bearer, legacy /portfolios /alerts /snapshots /actions /team/users /reports/* /portfolio/metrics and the AI SSE stream still pass. Frontend (Playwright, admin creds): FIX#9 login copy = 'LIVE · MONITORING 380 SITES · 5,473 ASSETS'; FIX#8 tour step 1 anchors directly under [data-testid=kpi-capacity] (card y=531 vs target 393+121) and step 2 under [data-testid=category-switcher], tour-skip removes the backdrop; FIX#10 alarms-sev-Critical chip present, filters to '38 matching alarms', 15 CRITICAL badges rendered in red (color rgb(127,29,29) / bg rgb(254,202,202)) and SiteDetail S00220 Critical alarm uses the same red; FIX#7 clicking Wind Farm (category-5) re-scopes everything — KPI 5.26 MW/30 sites/251 assets, sites table 20 Wind rows, 'ALARM STREAM · Wind Farm / 232 matching alarms', 'WORK ORDERS · Wind Farm / 34 total work orders' with a Wind-only status breakdown, and switching back to All Fleet restores 800/141; FIX#11 dashboard @390px scrollWidth 390 == clientWidth 390 (no horizontal overflow); SiteDetail telemetry chart now draws a real curve (utility solar bell on S00001, wind profile on S00220); /alerts /reports /team still load; dark-mode toggle works; zero JS/page errors and zero error elements.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/fleet/telemetry?site_id=S00001&hours=24", "issue": "With hours=24 the offset is always 0 because a site has exactly 24 distinct timestamps (window == total, so `% max(1, total-window+1)` == %1). Two polls 35s apart returned identical rows/offset, so the SiteDetail chart labelled 'LAST 24H · LIVE' never actually moves at the default 24h window (sliding only observable for hours<24). Cosmetic/demo-only — data itself is correct."},
+      {"endpoint": "GET /api/fleet/kpis, /fleet/sites, /fleet/alarms?category, /fleet/work-orders?category", "issue": "Still loads all in-scope site_ids into memory (to_list(2000)) and passes a large $in for several sub-queries per request, polled every 5s. Pre-existing scalability note, not a regression."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SitesTable / SiteDetail PR", "issue": "Performance ratio still rendered unclamped — S00002 shows 101.0% (52.3 kW site). Pre-existing LOW from iteration 10, not part of this fix set.", "selector": "[data-testid=\"sites-table\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard dark mode", "issues": ["Alarm severity / asset-status badges still use hardcoded light pastel hex (#fecaca/#fee2e2/#fef3c7/#dff5e9) instead of theme tokens, so they stay pastel-on-dark in dark mode (pre-existing, not in this fix set)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration11.py", "/app/backend/tests/test_iteration10.py", "/app/test_reports/pytest/iteration11.xml"],
+  "action_items": [
+    "Optional (LOW): make the telemetry sliding window meaningful at hours=24 — e.g. rotate the aggregated series (deque rotate by wall-clock) instead of slicing, so the default 24h 'LIVE' chart visibly advances.",
+    "Optional (LOW, carried over): clamp/annotate PR% > 100% in SitesTable/SiteDetail and move severity badge colors to theme tokens for dark mode."
+  ],
+  "critical_code_review_comments": [
+    "routers/fleet.py telemetry: `offset = int(time.time()//30) % max(1, total - window + 1)` degenerates to 0 whenever window == total (the common hours=24 case); the endpoint still advertises live=True.",
+    "routers/fleet.py: the category->site_ids expansion is now duplicated in kpis, alarms and work-orders (3 copies of the same find+guard). Extract a `_site_ids_for_category(category)` helper returning None/[] to keep the empty-scope guard in one place.",
+    "routers/fleet.py is nearing the size/complexity where the alarms/work-orders/telemetry aggregations should move into a small service module, but it is still under the 700-line guideline."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration11.py"],
+  "success_rate": {"backend": "100% (155/155 pytest)", "frontend": "100% of the 5 targeted frontend fixes + regression flows verified"},
+  "seed_data_creation": "None persisted. Tests reuse the seeded dataset; conftest cleans up any registered throwaway users.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@greensolutions.ai / Admin@123 (from /app/memory/test_credentials.md) — works; do NOT send a wrong password (5 fails => 15 min lockout).",
+  "context_for_next_testing_agent": "Run `cd /app/backend && python -m pytest tests/ -q` (155 tests, ~2min, xdist -n 2 preconfigured). All 11 iteration-10 bugs are fixed and covered by tests/test_iteration11.py. Frontend: the onboarding tour still shows on a fresh profile and its backdrop legitimately intercepts clicks — click [data-testid=\"tour-skip\"] first; tour card testids are tour-step-kpis/categories/sites/ai/export (NOT numeric). New verified testids: alarms-sev-Critical, category-switcher, dashboard-page. Wind Farm chip = [data-testid=\"category-5\"], All Fleet = category-all. Expected values: fleet 380 sites/5473 assets/800 alarms/141 WOs; Wind Farm 30 sites/251 assets/232 alarms/34 WOs; Critical alarms = 38.",
+  "rca_of_the_issue": "No new defects. The only residual finding is that telemetry's sliding-window offset math collapses to 0 when the requested window equals the number of distinct timestamps for the site (24), so the default 24h dashboard/site chart is static despite live=True; the aggregation fix itself (group by timestamp, sum power) is correct and produces the expected diurnal curve."
+}

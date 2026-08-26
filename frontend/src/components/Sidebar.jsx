@@ -1,7 +1,7 @@
 import { NavLink, Link } from "react-router-dom";
 import {
   Home, Layers, Cpu, Workflow, Users, MessageSquare,
-  LayoutDashboard, ArrowUpRight, UserPlus, Mail, Bell,
+  LayoutDashboard, ArrowUpRight, UserPlus, Mail, Bell, MapPin,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 

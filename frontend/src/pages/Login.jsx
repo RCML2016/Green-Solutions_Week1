@@ -54,7 +54,7 @@ export default function Login() {
             <div className="text-xs text-[color:var(--ink-2)]">Powered by Claude Sonnet 5 — explainable, auditable AI</div>
           </div>
           <div className="mt-8 flex items-center gap-2 text-[11px] font-mono text-[color:var(--ink-3)]">
-            <span className="pulse-dot" /> LIVE · MONITORING 128 ASSETS
+            <span className="pulse-dot" /> LIVE · MONITORING 380 SITES · 5,473 ASSETS
           </div>
         </div>
       </div>

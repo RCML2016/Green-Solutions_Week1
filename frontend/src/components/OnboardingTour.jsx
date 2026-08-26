@@ -4,16 +4,23 @@ import { X, ArrowRight } from "lucide-react";
 const STEPS = [
   {
     id: "kpis",
-    target: '[data-testid="kpi-portfolio-health"]',
+    target: '[data-testid="kpi-capacity"]',
     title: "Live KPIs",
-    body: "These cards refresh every 5 seconds. Watch health, findings and 24-hour energy update in real time.",
+    body: "These cards refresh every 5 seconds — total MW, PR%, energy, alarms, work orders and revenue loss for the fleet.",
     placement: "bottom",
   },
   {
-    id: "findings",
-    target: '[data-testid^="finding-"]',
-    title: "AI Findings",
-    body: "Every high-severity anomaly is prioritized. Filter by severity, minimum confidence, or asset code up top.",
+    id: "categories",
+    target: '[data-testid="category-switcher"]',
+    title: "Category Switcher",
+    body: "Filter every card, table and alert to a specific asset class — Solar, BESS, Wind, and more.",
+    placement: "bottom",
+  },
+  {
+    id: "sites",
+    target: '[data-testid="sites-table"]',
+    title: "Fleet Sites",
+    body: "Every site with its latest PR%, availability and open alarms. Click a row to drill down.",
     placement: "top",
   },
   {

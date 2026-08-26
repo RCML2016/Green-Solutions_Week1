@@ -16,6 +16,7 @@ import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
+import SiteDetail from "@/pages/SiteDetail";
 import Team from "@/pages/Team";
 import Reports from "@/pages/Reports";
 import Alerts from "@/pages/Alerts";
@@ -77,6 +78,14 @@ function App() {
               element={
                 <Protected>
                   <Alerts />
+                </Protected>
+              }
+            />
+            <Route
+              path="/site/:site_id"
+              element={
+                <Protected>
+                  <SiteDetail />
                 </Protected>
               }
             />
