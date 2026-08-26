@@ -105,10 +105,12 @@ export default function Login() {
             admin@greensolutions.ai · Admin@123
           </div>
 
-          <div className="mt-6 text-sm text-white/60">
-            New here?{" "}
+          <div className="mt-6 text-sm text-white/60 flex justify-between">
             <Link to="/register" className="text-[#6dfcb2] hover:text-[#22d17a]" data-testid="login-to-register">
               Create an account
+            </Link>
+            <Link to="/forgot-password" className="text-white/60 hover:text-white" data-testid="login-forgot">
+              Forgot password?
             </Link>
           </div>
         </form>

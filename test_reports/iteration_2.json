@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 2 full test of the 4 new features (password reset, 5s polling, AI Insight Assistant SSE, PDF export) plus regression. Backend: created /app/backend/tests/backend_test.py (pytest, 20 tests) covering auth regression, bcrypt hash format, metrics jitter, forgot/reset-password (happy path, unknown email, malformed token, token reuse, force-expired token, pydantic validation) and /api/ai/insight SSE streaming (auth-protected, general + finding-context, delta chunks + done event). ALL 20 PASSED. Frontend (Playwright, public preview URL): login 'Forgot password?' link -> /forgot-password -> submit -> forgot-result card with demo link -> click link -> /reset-password?token=... -> mismatch shows reset-error -> matching passwords navigate to /login with 'Password updated' toast -> login with the new password succeeds. /reset-password without token shows guard message and disables submit. Dashboard: admin login works, 3 of 4 KPI cards changed value within 6.5s (polling confirmed), ai-insight-panel streams a real Claude response for both general question and INV-04 context chip (label 'YOU · INV-04' rendered), Export Report triggered a real PDF download (green-solutions-dashboard-2026-08-26.pdf) with 'Report exported' toast and ZERO console/page errors. Backend supervisor log shows [PASSWORD RESET] links logged server-side and no exceptions.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "User-enumeration leak (demo-only, acceptable if intentional): /api/auth/forgot-password returns the same message for all emails but demo_reset_link is non-null ONLY for existing accounts, so the response still discloses account existence. Fine for demo, must be removed before production.",
+    "backend/.env defines CORS_ORIGINS but server.py hardcodes allow_origins=[\"*\"]; the env var is unused. Read it from env to avoid dead config.",
+    "No rate limiting / brute-force lockout on /api/auth/login or /api/auth/forgot-password — unlimited reset tokens can be minted per email (playbook lockout check not implemented; app uses Bearer-JWT-in-localStorage, not the httpOnly-cookie playbook).",
+    "/api/auth/reset-password marks only the used token as used; other outstanding tokens for the same user remain valid. Invalidate all tokens for the user_id after a successful reset.",
+    "AI insight uses a fixed session_id (insight-<user_id>), so LLM history accumulates indefinitely across visits — consider per-conversation session ids to bound context/cost.",
+    "Dashboard polling interval keeps running when the tab is hidden; consider pausing on document.visibilitychange to reduce needless load."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100%"},
+  "seed_data_creation": "Temp users TEST_reset_*/TEST_ui_*@example.com created via /api/auth/register for reset flows; pytest session cleanup removes TEST_reset_* users and TEST_QA contact messages. One TEST_ui_* user from the Playwright run remains in the users collection (harmless).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@greensolutions.ai / Admin@123 (unchanged — reset tests deliberately used throwaway users so admin creds stay valid)",
+  "context_for_next_testing_agent": "Regression suite lives at /app/backend/tests/backend_test.py (run with pytest.ini as-is, -n 2 loadscope). SSE tests use requests(stream=True) and iter_lines. Never run reset-password against the admin email — it would break the documented credentials; register a TEST_ user instead. KPI testids: kpi-portfolio-health, kpi-ai-findings, kpi-ai-confidence, kpi-energy-24h. All 4 features verified working end-to-end in iteration 2.",
+  "rca_of_the_issue": "No defects found; only hardening/code-quality notes listed above."
+}

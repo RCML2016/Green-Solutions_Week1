@@ -29,6 +29,12 @@
   - Sonner toaster for notifications
   - Dashboard shows live-ish KPIs (portfolio health, AI findings, confidence, energy) + priority findings + chart
 
+## Added in iteration 2 (2026-02)
+- **Password reset**: `/api/auth/forgot-password` + `/api/auth/reset-password`, MongoDB TTL index on tokens, console-logged reset links, `/forgot-password` and `/reset-password` UI pages.
+- **Real-time refresh**: `/api/portfolio/metrics` returns jittered values on every call; Dashboard polls every 5s with pulse animation.
+- **AI Insight Assistant**: `/api/ai/insight` — SSE streaming from Claude Sonnet 5 via `emergentintegrations` and EMERGENT_LLM_KEY. Right-panel chat on Dashboard with finding-context chips.
+- **Report Export**: Client-side PDF via `jspdf` + `html2canvas` captures the whole dashboard, one-click download.
+
 ## Prioritized Backlog
 - P1: Real-time metrics WebSocket refresh
 - P1: Password reset flow (forgot / reset)

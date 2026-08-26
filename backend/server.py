@@ -7,15 +7,20 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import logging
 import uuid
+import secrets
+import random
+import json
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, List
 
 import bcrypt
 import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
 
 # --- Config ---
@@ -86,11 +91,27 @@ class ContactRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
+class ForgotRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=6, max_length=128)
+
+
+class InsightRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    finding_code: Optional[str] = None
+
+
 # --- Startup ---
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.password_reset_tokens.create_index("token", unique=True)
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@greensolutions.ai").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
@@ -179,23 +200,124 @@ async def contact(payload: ContactRequest):
 
 @api_router.get("/portfolio/metrics")
 async def portfolio_metrics(user: dict = Depends(get_current_user)):
-    # Static-but-realistic dashboard metrics for the demo
+    # Jittered live-feel metrics — refreshed on every poll
+    def jitter(base, spread=1.5, lo=None, hi=None):
+        v = base + random.uniform(-spread, spread)
+        if lo is not None: v = max(lo, v)
+        if hi is not None: v = min(hi, v)
+        return round(v, 1)
+
+    base_findings = [
+        {"code": "INV-04", "title": "Communication Dropout", "severity": "high", "base_conf": 91},
+        {"code": "INV-01", "title": "String Underperformance", "severity": "high", "base_conf": 83},
+        {"code": "INV-07", "title": "Thermal Drift", "severity": "medium", "base_conf": 72},
+        {"code": "INV-12", "title": "Soiling Anomaly", "severity": "medium", "base_conf": 68},
+    ]
+    findings = [
+        {"code": f["code"], "title": f["title"], "severity": f["severity"],
+         "confidence": max(1, min(99, int(f["base_conf"] + random.uniform(-2, 2))))}
+        for f in base_findings
+    ]
     return {
-        "portfolio_health": 80,
-        "portfolio_health_change": 4.2,
+        "portfolio_health": jitter(80, 1.2, 60, 99),
+        "portfolio_health_change": jitter(4.2, 0.6, -2, 8),
         "ai_findings": 4,
         "high_priority_findings": 2,
-        "ai_confidence": 84,
-        "assets_online": 128,
+        "ai_confidence": jitter(84, 1.5, 60, 99),
+        "assets_online": 128 + random.randint(-1, 1),
         "assets_total": 132,
-        "energy_last_24h_mwh": 2148.6,
-        "findings": [
-            {"code": "INV-04", "title": "Communication Dropout", "confidence": 91, "severity": "high"},
-            {"code": "INV-01", "title": "String Underperformance", "confidence": 83, "severity": "high"},
-            {"code": "INV-07", "title": "Thermal Drift", "confidence": 72, "severity": "medium"},
-            {"code": "INV-12", "title": "Soiling Anomaly", "confidence": 68, "severity": "medium"},
-        ],
+        "energy_last_24h_mwh": jitter(2148.6, 12, 1900, 2400),
+        "findings": findings,
+        "server_time": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotRequest):
+    email = payload.email.lower()
+    user = await db.users.find_one({"email": email})
+    # Always return same response to avoid user enumeration
+    if user:
+        token = secrets.token_urlsafe(32)
+        await db.password_reset_tokens.insert_one({
+            "token": token,
+            "user_id": user["id"],
+            "email": email,
+            "used": False,
+            "created_at": datetime.now(timezone.utc),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+        })
+        frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
+        reset_link = f"{frontend_url}/reset-password?token={token}"
+        logging.info(f"[PASSWORD RESET] Link for {email}: {reset_link}")
+        return {"ok": True, "message": "If an account exists, a reset link has been generated.", "demo_reset_link": reset_link}
+    return {"ok": True, "message": "If an account exists, a reset link has been generated.", "demo_reset_link": None}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(payload: ResetRequest):
+    record = await db.password_reset_tokens.find_one({"token": payload.token})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    if record.get("used"):
+        raise HTTPException(status_code=400, detail="This reset link has already been used")
+    expires = record["expires_at"]
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires:
+        raise HTTPException(status_code=400, detail="This reset link has expired")
+    await db.users.update_one(
+        {"id": record["user_id"]},
+        {"$set": {"password_hash": hash_password(payload.new_password)}},
+    )
+    await db.password_reset_tokens.update_one(
+        {"token": payload.token},
+        {"$set": {"used": True}},
+    )
+    return {"ok": True, "message": "Password updated. You can sign in now."}
+
+
+@api_router.post("/ai/insight")
+async def ai_insight(payload: InsightRequest, user: dict = Depends(get_current_user)):
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    context = ""
+    if payload.finding_code:
+        context = f"\nThe operator is asking about finding {payload.finding_code}. Include severity, likely root cause, and one recommended action."
+
+    system = (
+        "You are the Green Solutions AI Insight Assistant — an explainable AI for renewable "
+        "energy operations. Answer concisely (max 5 short sentences). Ground answers in solar/wind "
+        "operations: inverters, strings, soiling, thermal drift, communication dropouts, curtailment. "
+        "When you make a recommendation, prefix it with 'Action:'. Never invent SLAs or financials."
+    )
+    chat = LlmChat(
+        api_key=api_key,
+        session_id=f"insight-{user['id']}",
+        system_message=system,
+    ).with_model("anthropic", "claude-sonnet-5")
+
+    user_msg = UserMessage(text=payload.question + context)
+
+    async def gen():
+        try:
+            async for ev in chat.stream_message(user_msg):
+                if isinstance(ev, TextDelta):
+                    yield f"data: {json.dumps({'delta': ev.content})}\n\n"
+                elif isinstance(ev, StreamDone):
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
+        except Exception as e:
+            logging.exception("AI insight error")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 app.include_router(api_router)
