@@ -1,0 +1,15 @@
+# Railway blueprint for AssetNova
+# Docs: https://docs.railway.app/reference/config-as-code
+#
+# This file is not strictly required — Railway will auto-detect the two
+# Dockerfiles and MongoDB add-on. It's included so `railway up` picks the
+# right build settings and healthcheck out of the box.
+
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 30

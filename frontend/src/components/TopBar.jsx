@@ -8,6 +8,7 @@ import { ROLES, landingFor, MARKETING_NAV } from "@/lib/roles";
 import { toast } from "sonner";
 import PasswordChangeModal from "./PasswordChangeModal";
 import BookDemoModal from "./BookDemoModal";
+import { BrandWordmark } from "./BrandMark";
 
 const TOP_LINKS = MARKETING_NAV.map((l) => ({ to: l.to, label: l.label, end: l.end }));
 
@@ -52,16 +53,8 @@ export default function TopBar() {
         data-testid="app-topbar"
         className="sticky top-0 z-20 h-[72px] bg-[color:var(--bg-2)]/70 backdrop-blur-md border-b border-[color:var(--line)] flex items-center justify-between px-6 lg:px-10"
       >
-        <Link to="/" className="lg:hidden flex items-center gap-2" data-testid="topbar-logo">
-          <div className="flex items-end gap-[3px] h-5">
-            <span className="w-1.5 h-2 rounded-sm" style={{ background: "var(--brand)" }} />
-            <span className="w-1.5 h-3.5 rounded-sm" style={{ background: "var(--brand-2)" }} />
-            <span className="w-1.5 h-5 rounded-sm" style={{ background: "var(--brand-3)" }} />
-          </div>
-          <div className="font-display text-sm">
-            <span className="text-[color:var(--ink)]">ASSET</span>
-            <span className="text-[color:var(--brand-3)] ml-1">NOVA</span>
-          </div>
+        <Link to="/" className={`${user ? "lg:hidden" : ""} flex items-center gap-2`} data-testid="topbar-logo">
+          <BrandWordmark size={24} />
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">

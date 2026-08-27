@@ -2,6 +2,7 @@ import { NavLink, Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLES, visibleAppItems } from "@/lib/roles";
+import { BrandMark } from "./BrandMark";
 
 /** App sidebar — visible ONLY to logged-in users. Renders the 8-item app nav
  *  (or the single-page walled garden for technician / perf / client). */
@@ -22,11 +23,7 @@ export default function Sidebar() {
         className="flex items-center gap-3 px-6 h-[72px] border-b border-[color:var(--line)]"
         data-testid="sidebar-logo"
       >
-        <div className="flex items-end gap-[3px] h-5">
-          <span className="w-1.5 h-2 rounded-sm" style={{ background: "var(--brand)" }} />
-          <span className="w-1.5 h-3.5 rounded-sm" style={{ background: "var(--brand-2)" }} />
-          <span className="w-1.5 h-5 rounded-sm" style={{ background: "var(--brand-3)" }} />
-        </div>
+        <BrandMark size={26} />
         <div className="leading-none">
           <div className="font-display text-[13px] tracking-wide text-[color:var(--ink)]">ASSET</div>
           <div className="font-display text-[13px] tracking-wide text-[color:var(--brand-3)]">NOVA</div>

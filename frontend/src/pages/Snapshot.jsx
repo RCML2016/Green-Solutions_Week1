@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { API } from "@/lib/api";
 import { Activity, Sparkles, Zap, AlertTriangle, Lock } from "lucide-react";
+import { BrandWordmark } from "@/components/BrandMark";
 
 export default function Snapshot() {
   const { token } = useParams();
@@ -45,15 +46,7 @@ export default function Snapshot() {
     <div className="min-h-screen gs-canvas" data-testid="snapshot-page">
       <header className="border-b border-[color:var(--line)] bg-[color:var(--bg-2)]/70 backdrop-blur-md px-6 lg:px-14 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex items-end gap-[3px] h-5">
-            <span className="w-1.5 h-2 rounded-sm" style={{ background: "var(--brand)" }} />
-            <span className="w-1.5 h-3.5 rounded-sm" style={{ background: "var(--brand-2)" }} />
-            <span className="w-1.5 h-5 rounded-sm" style={{ background: "var(--brand-3)" }} />
-          </div>
-          <div className="font-display text-sm">
-            <span className="text-[color:var(--ink)]">GREEN</span>
-            <span className="text-[color:var(--brand-3)] ml-1">SOLUTIONS</span>
-          </div>
+          <BrandWordmark size={22} />
         </Link>
         <div className="text-[10px] font-mono text-[color:var(--ink-3)]">
           READ-ONLY SNAPSHOT · CAPTURED {new Date(data.created_at).toLocaleString()}

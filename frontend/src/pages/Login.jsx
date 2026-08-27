@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { landingFor } from "@/lib/roles";
+import { BrandMark } from "@/components/BrandMark";
 
 export default function Login() {
   const { login } = useAuth();
@@ -43,10 +44,8 @@ export default function Login() {
           <Link to="/" className="flex items-center gap-2 text-[color:var(--ink-2)] hover:text-[color:var(--ink)] text-sm mb-16">
             <ArrowLeft size={14} /> Back to site
           </Link>
-          <div className="flex items-end gap-1 h-8 mb-8">
-            <span className="w-2 h-3 rounded-sm" style={{ background: "var(--brand)" }} />
-            <span className="w-2 h-5 rounded-sm" style={{ background: "var(--brand-2)" }} />
-            <span className="w-2 h-8 rounded-sm" style={{ background: "var(--brand-3)" }} />
+          <div className="mb-8">
+            <BrandMark size={44} />
           </div>
           <h2 className="font-display text-4xl leading-tight text-[color:var(--ink)]">
             Sign in to your <br /> renewable <span className="text-[color:var(--brand-3)]">intelligence.</span>
