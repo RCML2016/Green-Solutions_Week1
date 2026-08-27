@@ -79,11 +79,6 @@ export default function TopBar() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2 text-[11px] font-mono text-[color:var(--ink-3)]">
-            <span className="pulse-dot" />
-            LIVE
-          </div>
-
           <button
             onClick={toggle}
             data-testid="theme-toggle"

@@ -97,17 +97,6 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="mt-8 rounded-xl border border-[color:var(--line)] bg-[color:var(--bg-3)] p-4 text-xs text-[color:var(--ink-2)] font-mono space-y-1">
-            <div className="text-[color:var(--ink-3)] mb-1">DEMO ACCOUNTS · TRY ANY ROLE</div>
-            <div>admin@assetnova.com · Admin@123</div>
-            <div>executive@assetnova.com · Executive@123</div>
-            <div>assetmgr@assetnova.com · Asset@123</div>
-            <div>ops@assetnova.com · Ops@123</div>
-            <div>tech@assetnova.com · Tech@123</div>
-            <div>perf@assetnova.com · Perf@123</div>
-            <div>client@assetnova.com · Client@123</div>
-          </div>
-
           <div className="mt-6 text-sm text-[color:var(--ink-2)] flex justify-between">
             <Link to="/register" className="text-[color:var(--brand-3)] hover:text-[color:var(--brand)]" data-testid="login-to-register">
               Create an account
