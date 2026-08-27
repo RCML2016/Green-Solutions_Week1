@@ -37,6 +37,12 @@
     --shine-mint: linear-gradient(140deg, #eff9f3 0%, #dff5e9 55%, #eff9f3 100%);
     --shine-emerald: linear-gradient(140deg, #087346 0%, #18a866 55%, #22c07a 100%);
     --shine-glass: linear-gradient(140deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55));
+
+    /* Hero backdrop — theme-aware, used by .hero-canvas */
+    --hero-tint-1: rgba(52,211,153,0.28);
+    --hero-tint-2: rgba(253,224,71,0.18);
+    --hero-base-1: #ecfef4;
+    --hero-base-2: #f6f9f2;
 }
 
 /* ===== Soft dark mode — deep forest with green accents ===== */
@@ -66,6 +72,24 @@
     --shine-mint: linear-gradient(140deg, #0e2a1e 0%, #071c14 55%, #0f2b1f 100%);
     --shine-emerald: linear-gradient(140deg, #087346 0%, #18a866 55%, #7dffb8 100%);
     --shine-glass: linear-gradient(140deg, rgba(14,42,30,0.85), rgba(14,42,30,0.55));
+
+    /* Hero backdrop — dark forest with subtle emerald/amber glow */
+    --hero-tint-1: rgba(52,211,153,0.18);
+    --hero-tint-2: rgba(253,224,71,0.08);
+    --hero-base-1: #0e2a1e;
+    --hero-base-2: #0a2218;
+}
+
+.hero-canvas {
+    background:
+        radial-gradient(1200px 600px at 15% -20%, var(--hero-tint-1), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, var(--hero-tint-2), transparent 60%),
+        linear-gradient(180deg, var(--hero-base-1) 0%, var(--hero-base-2) 100%);
+}
+.hero-canvas-vertical {
+    background:
+        radial-gradient(1200px 600px at 15% -20%, var(--hero-tint-1), transparent 60%),
+        linear-gradient(160deg, var(--hero-base-1) 0%, var(--hero-base-2) 100%);
 }
 
 [data-theme="dark"] .gs-canvas {
@@ -83,6 +107,22 @@
 [data-theme="dark"] .gs-btn-ghost { background: rgba(255,255,255,0.04); }
 [data-theme="dark"] .gs-input { background: #0a1611; color: var(--ink); }
 [data-theme="dark"] body { background: var(--bg); color: var(--ink); }
+
+/* Dark-mode contrast fixes: neutralize hardcoded white surfaces so every
+ * marketing page / modal / card that used `bg-white` (or its opacity variants)
+ * elevates onto the forest palette instead of blowing out to pure white.
+ * Same treatment for hardcoded black text and hairline light greys. */
+[data-theme="dark"] .bg-white { background-color: var(--bg-2) !important; }
+[data-theme="dark"] .bg-white\/70 { background-color: rgba(14,42,30,0.75) !important; }
+[data-theme="dark"] .bg-white\/60 { background-color: rgba(14,42,30,0.65) !important; }
+[data-theme="dark"] .bg-white\/50 { background-color: rgba(14,42,30,0.55) !important; }
+[data-theme="dark"] .text-black,
+[data-theme="dark"] .text-gray-900,
+[data-theme="dark"] .text-slate-900 { color: var(--ink) !important; }
+[data-theme="dark"] .text-gray-700,
+[data-theme="dark"] .text-slate-700 { color: var(--ink-2) !important; }
+[data-theme="dark"] .text-gray-500,
+[data-theme="dark"] .text-slate-500 { color: var(--ink-3) !important; }
 
 html, body, #root {
     height: 100%;

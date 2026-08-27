@@ -28,17 +28,9 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex" style={{ background: "var(--bg)" }}>
       {/* Left shine panel */}
-      <div
-        className="hidden lg:flex w-1/2 relative overflow-hidden"
-        style={{
-          background:
-            "radial-gradient(900px 500px at 20% 10%, rgba(52,211,153,0.35), transparent 60%)," +
-            "radial-gradient(700px 400px at 90% 90%, rgba(253,224,71,0.20), transparent 60%)," +
-            "linear-gradient(160deg, #ecfef4 0%, #f6f9f2 100%)",
-        }}
-      >
+      <div className="hidden lg:flex w-1/2 relative overflow-hidden hero-canvas-vertical">
         <div className="absolute inset-0 gs-grain opacity-40" />
         <div className="relative m-auto max-w-md px-14">
           <Link to="/" className="flex items-center gap-2 text-[color:var(--ink-2)] hover:text-[color:var(--ink)] text-sm mb-16">

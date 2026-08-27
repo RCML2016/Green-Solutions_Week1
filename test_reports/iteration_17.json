@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only visual/contrast regression test of the light<->dark theme fix on AssetNova. Injected a WCAG contrast calculator (composites nested rgba backgrounds) into every page and scanned all visible text nodes for ratio < 3:1, plus targeted measurements of the specific headings/labels called out in the request. Covered: landing (/) hero + section-2, /platform, /solutions, /how-it-works, /about, /contact, /login (both themes), /admin, /overview, /dashboard, /alerts, /reports in dark mode, theme toggle both directions, localStorage persistence across F5, and the admin login flow in dark mode.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dark /login left panel",
+        "issues": ["Cosmetic only: .hero-canvas-vertical in dark mode renders almost identical in luminance to the right form column (--bg #071c14 vs --hero-base-2 #071c14), so the two-column split is barely perceptible. All text remains legible (ratios 4.87-16.46). Optional polish, not a defect."]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Docs/handoff note mismatch: ThemeContext persists under localStorage key 'gs_theme', not 'theme' as stated in the request. Behaviour is correct; just align documentation.",
+    "index.css dark overrides use !important on .bg-white / .text-gray-900 etc. This works today but is a broad hammer — future components needing a genuinely white surface in dark mode will need an escape-hatch class."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "not tested (out of scope)", "frontend": "100%" },
+  "seed_data_creation": "none",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@assetnova.com / Admin@123 (used, login succeeded in dark mode, landed on /admin)",
+  "detailed_results": {
+    "landing_dark": "hero H1 16.46:1, subtitle 10.15:1, eyebrow 14.23:1, 'Explore Platform' 17.72:1, 'See How It Works' 14.93:1, all three counters (380+/5.5K/60K) 16.46:1, stat labels 4.87:1, section-2 'The intelligence layer for renewable energy.' 14.26:1. Gradient text 'more intelligent.' verified visually legible (bright green on forest).",
+    "landing_light_regression": "hero H1 17.72:1, subtitle 13.28:1, eyebrow 5.91:1, stat labels 4.66:1 — unchanged bright white + green palette, no dark bleed.",
+    "login_dark": "Left heading 16.46:1, subtext 10.15:1, 'Powered by Claude Sonnet 5' pill background correctly remapped to rgb(14,42,30) (not white) with 8.79:1 text, LIVE mono stat 4.87:1, 'Welcome back.' 16.46:1, Sign In button 17.72:1, Create/Forgot links 14.23:1 / 4.87:1. Inputs remapped to rgb(10,22,17).",
+    "admin_dark": "0 text nodes below 3:1. 'Platform controls', all 4 KPI cards (USERS/28, SEEDED SITES/380, API HEALTH/OK, AI PROVIDER/Claude Sonnet 5), 'Team credentials · CSV' button, LEADS INBOX rows all readable (screenshot verified).",
+    "marketing_pages_dark": "/platform, /solutions, /how-it-works, /about, /contact — 0 nodes below 3:1 each. /about outer bg-white correctly renders deep forest.",
+    "app_pages_dark": "/overview, /dashboard, /alerts, /reports — 0 nodes below 3:1 each.",
+    "toggle_and_persistence": "light->dark and dark->light both work from TopBar [data-testid=theme-toggle]; localStorage['gs_theme'] set correctly; dark persists across page reload; toggling back to light restores body bg rgb(255,255,255) with no residual dark surfaces.",
+    "console": "No console errors on any page in either theme.",
+    "false_positives": "The scanner flagged gs-btn-primary buttons ('Get Started', 'Explore Platform', 'Launch AI Platform', 'Sign In', 'Send Message') at ratio ~1 in light mode. These use a CSS linear-gradient background (backgroundColor is transparent) so the computed-style walk falls through to white. Screenshots confirm white text on a solid emerald gradient — NOT a real defect."
+  },
+  "context_for_next_testing_agent": "Theme storage key is localStorage['gs_theme'] ('light'|'dark'), applied as data-theme on <html>. Theme toggle only exists in TopBar/app shell — /login and /register are standalone, so set theme on / first (or seed localStorage) before visiting them. When measuring contrast programmatically, skip .gs-btn-primary/.gs-btn-ghost — their backgrounds are gradients, so computed backgroundColor is transparent and produces false failures. Dark mode currently passes 3:1 on every scanned page; lowest real ratios are the --ink-3 meta/caption tokens at ~4.87:1 (still AA for normal text).",
+  "rca_of_the_issue": "Original bug was hardcoded Tailwind bg-white / light gradient inline styles that stayed bright in dark mode, crushing contrast against light text. Fix (theme-aware --hero-* vars + .hero-canvas utilities + [data-theme=dark] overrides for .bg-white and .text-gray-900 family) is verified effective: zero sub-3:1 text nodes across 11 routes in dark mode and no light-mode regression."
+}

@@ -26,14 +26,7 @@ export default function Landing() {
   return (
     <div>
       {/* HERO — bright, shiny */}
-      <section className="relative overflow-hidden pt-12 lg:pt-20 pb-24"
-        style={{
-          background:
-            "radial-gradient(1200px 600px at 15% -20%, rgba(52,211,153,0.28), transparent 60%)," +
-            "radial-gradient(900px 500px at 100% 0%, rgba(253,224,71,0.18), transparent 60%)," +
-            "linear-gradient(180deg, #ecfef4 0%, #f6f9f2 100%)",
-        }}
-      >
+      <section className="hero-canvas relative overflow-hidden pt-12 lg:pt-20 pb-24">
         <div className="absolute inset-0 gs-grain opacity-50 pointer-events-none" />
         <div className="relative max-w-[1200px] mx-auto px-6 lg:px-10 grid lg:grid-cols-2 gap-16 items-center">
           <div>
