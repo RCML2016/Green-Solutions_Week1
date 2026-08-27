@@ -15,7 +15,8 @@ import uuid
 import logging
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from deps import db, close_db_client, hash_password, verify_password
@@ -47,6 +48,19 @@ async def root():
 async def healthz():
     fleet_sites = await db.fleet_sites.estimated_document_count()
     return {"ok": True, "fleet_sites": fleet_sites, "time": datetime.now(timezone.utc).isoformat()}
+
+
+@api_router.get("/download/source")
+async def download_source():
+    """Return the latest packaged source zip (built out-of-band via `zip -r`)."""
+    downloads_dir = ROOT_DIR.parent / "downloads"
+    if not downloads_dir.exists():
+        raise HTTPException(status_code=404, detail="No packaged build found")
+    zips = sorted(downloads_dir.glob("green-solutions-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not zips:
+        raise HTTPException(status_code=404, detail="No packaged build found")
+    latest = zips[0]
+    return FileResponse(latest, media_type="application/zip", filename=latest.name)
 
 
 @api_router.get("/rbac/landing")

@@ -5,6 +5,9 @@
 
 ---
 
+## Deployment
+See **[`DEPLOY.md`](./DEPLOY.md)** for Docker Compose, cloud hosting (Render / Railway / Fly / Vercel), and GitHub push instructions.
+
 ## Quick Start (Local)
 
 ### Prerequisites
