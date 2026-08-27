@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 18 — tested the new QA artefact deliverables feature. Backend: 6/6 pytest tests passed (/api/download/workflows-pdf returns 200, application/pdf, %PDF- signature, 14808 bytes, 9 pages, Content-Disposition attachment with correct filename; /api/download/test-cases-xlsx returns 200, correct spreadsheetml content-type, PK zip signature, 23449 bytes, workbook parses with openpyxl — Summary + per-role sheets, 40+ rows with Test ID/Role/Priority/Steps/Expected Result headers; /api/download/team-credentials CSV regression OK; /api/download/source zip regression OK; admin login OK). Frontend: logged in as admin@assetnova.com, landed on /admin, all three anchors (admin-download-credentials, admin-download-workflows, admin-download-testcases) render top-right, hrefs fully expanded to https://login-live-hub.preview.emergentagent.com/api/download/... (no literal ${...}), download attribute present on each, and all three clicks fired real browser downloads with correct suggested filenames and byte sizes (1984 / 14808 / 23449) with zero page navigation and zero console/DOM errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/download/team-credentials", "issue": "Endpoint is unauthenticated — plaintext passwords for all 21 demo users are downloadable by anyone who knows the URL. Acceptable for a demo, but should be gated behind admin JWT before any real deployment. Same applies to /api/download/source and the two new artefact endpoints."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration18.py",
+    "/app/test_reports/pytest/iteration18.xml"
+  ],
+  "action_items": [
+    "Optional (non-blocking): add admin-auth dependency to the /api/download/* endpoints, especially team-credentials which exposes plaintext passwords.",
+    "Optional: artefacts are static files on disk — if server.py/routes change, generate_qa_artifacts.py must be re-run manually or the docs will drift. Consider regenerating on startup or documenting the step."
+  ],
+  "critical_code_review_comments": [
+    "generate_qa_artifacts.py writes to /app/downloads which is not version-controlled by any build step; endpoints correctly return 404 when the file is absent, which is good defensive handling.",
+    "Download endpoints have no auth dependency (see minor backend issue)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration18.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None — read-only tests only.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@assetnova.com / Admin@123",
+  "context_for_next_testing_agent": "Iteration 18 covered only the new download-artefact feature (workflows PDF, test-cases XLSX, credentials CSV regression) and the 3 admin toolbar buttons — all passing. Note login submit button has no data-testid; use page.get_by_text('Sign In', exact=True) (button[type=submit] selector does NOT match). Reusable file: /app/backend/tests/test_iteration18.py.",
+  "rca_of_the_issue": "N/A — no defects found. Initial Playwright failure was a test-side selector issue (login button is not button[type=submit]), fixed in the test script."
+}

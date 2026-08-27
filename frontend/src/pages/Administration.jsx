@@ -91,14 +91,32 @@ export default function Administration() {
             Users, roles, integrations and configuration for the AssetNova platform.
           </p>
         </div>
-        <a
-          href={`${process.env.REACT_APP_BACKEND_URL}/api/download/team-credentials`}
-          download
-          data-testid="admin-download-credentials"
-          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-4 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
-        >
-          <Download size={14} /> Team credentials · CSV
-        </a>
+        <div className="flex flex-wrap items-center gap-2" data-testid="admin-downloads">
+          <a
+            href={`${process.env.REACT_APP_BACKEND_URL}/api/download/team-credentials`}
+            download
+            data-testid="admin-download-credentials"
+            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-3.5 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
+          >
+            <Download size={13} /> Credentials · CSV
+          </a>
+          <a
+            href={`${process.env.REACT_APP_BACKEND_URL}/api/download/workflows-pdf`}
+            download
+            data-testid="admin-download-workflows"
+            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-3.5 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
+          >
+            <Download size={13} /> Workflows · PDF
+          </a>
+          <a
+            href={`${process.env.REACT_APP_BACKEND_URL}/api/download/test-cases-xlsx`}
+            download
+            data-testid="admin-download-testcases"
+            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-3.5 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
+          >
+            <Download size={13} /> Test Cases · XLSX
+          </a>
+        </div>
       </div>
 
       {/* System KPIs */}
