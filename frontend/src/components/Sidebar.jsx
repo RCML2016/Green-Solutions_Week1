@@ -28,8 +28,8 @@ export default function Sidebar() {
           <span className="w-1.5 h-5 rounded-sm" style={{ background: "var(--brand-3)" }} />
         </div>
         <div className="leading-none">
-          <div className="font-display text-[13px] tracking-wide text-[color:var(--ink)]">GREEN</div>
-          <div className="font-display text-[13px] tracking-wide text-[color:var(--brand-3)]">SOLUTIONS</div>
+          <div className="font-display text-[13px] tracking-wide text-[color:var(--ink)]">ASSET</div>
+          <div className="font-display text-[13px] tracking-wide text-[color:var(--brand-3)]">NOVA</div>
         </div>
       </Link>
 
@@ -67,7 +67,7 @@ export default function Sidebar() {
 
       <div className="p-4 border-t border-[color:var(--line)]">
         <a
-          href="https://green-solutions-ai.streamlit.app/"
+          href="https://www.assetnova.com/"
           target="_blank"
           rel="noreferrer"
           data-testid="sidebar-launch-platform"

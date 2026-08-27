@@ -11,7 +11,7 @@ class TestHealthAndAuth:
     def test_root(self):
         r = requests.get(f"{API}/", timeout=30)
         assert r.status_code == 200
-        assert r.json()["message"] == "Green Solutions API"
+        assert r.json()["message"] == "AssetNova API"
 
     def test_login_and_me(self, admin_creds):
         r = requests.post(f"{API}/auth/login", json=admin_creds, timeout=30)

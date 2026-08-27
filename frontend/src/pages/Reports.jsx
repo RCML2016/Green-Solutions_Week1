@@ -133,7 +133,7 @@ export default function Reports() {
         Auto-email a <span className="text-[color:var(--brand-3)]">PDF snapshot</span> to stakeholders.
       </h1>
       <p className="text-[color:var(--ink-3)] text-sm mt-2 max-w-xl">
-        Choose a cadence and recipient list. When enabled, Green Solutions will render the
+        Choose a cadence and recipient list. When enabled, AssetNova will render the
         dashboard and deliver it — no manual export needed.
       </p>
 
@@ -303,7 +303,7 @@ export default function Reports() {
                   {branding.company_name || "Portfolio Report"}
                 </div>
                 <div className="text-xs font-mono text-[color:var(--ink-3)] mt-1">
-                  Green Solutions · {new Date().toLocaleDateString()}
+                  AssetNova · {new Date().toLocaleDateString()}
                 </div>
                 <p className="text-sm text-[color:var(--ink-2)] mt-6 whitespace-pre-wrap">
                   {branding.cover_note || "Your cover note appears here — perfect for a monthly executive summary or a stakeholder update."}

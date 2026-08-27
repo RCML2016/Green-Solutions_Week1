@@ -76,7 +76,7 @@ class TestAdminNoSelfLockout:
 # ---------------- PERF: /api/client/portfolio aggregation ----------------
 class TestClientPortfolioAggregation:
     def test_portfolio_shape_default_client(self):
-        d = _login("client@greensolutions.ai", "Client@123")
+        d = _login("client@assetnova.com", "Client@123")
         h = {"Authorization": f"Bearer {d['access_token']}"}
         t0 = time.time()
         r = requests.get(f"{API}/client/portfolio", headers=h, timeout=60)
@@ -151,7 +151,7 @@ class TestClientPortfolioAggregation:
 # ---------------- THREADPOOL: evidence upload / download ----------------
 class TestEvidenceThreadpool:
     def test_upload_and_download(self):
-        d = _login("tech@greensolutions.ai", "Tech@123")
+        d = _login("tech@assetnova.com", "Tech@123")
         h = {"Authorization": f"Bearer {d['access_token']}"}
         r = requests.post(f"{API}/evidence",
                           files={"file": ("TEST_i14.png", io.BytesIO(PNG_BYTES), "image/png")},
@@ -160,7 +160,7 @@ class TestEvidenceThreadpool:
         assert r.status_code == 200, r.text
         rec = r.json()
         assert rec["content_type"] == "image/png"
-        assert rec["storage_path"].startswith("green-solutions/evidence/")
+        assert rec["storage_path"].startswith("assetnova/evidence/")
         assert "_id" not in rec
 
         f = requests.get(f"{API}/evidence/{rec['id']}/file", headers=h, timeout=120)
@@ -176,7 +176,7 @@ class TestEvidenceThreadpool:
     def test_event_loop_not_blocked_during_large_upload(self):
         """Fire a ~4MB upload and hit /api/healthz twice concurrently; the health
         checks must return quickly (event loop free)."""
-        d = _login("tech@greensolutions.ai", "Tech@123")
+        d = _login("tech@assetnova.com", "Tech@123")
         h = {"Authorization": f"Bearer {d['access_token']}"}
         big = PNG_BYTES + b"\x00" * (4 * 1024 * 1024)
 
@@ -209,20 +209,20 @@ class TestEvidenceThreadpool:
 # ---------------- REGRESSION: RBAC guards ----------------
 class TestRbacRegression:
     def test_client_viewer_blocked_from_admin_endpoints(self):
-        d = _login("client@greensolutions.ai", "Client@123")
+        d = _login("client@assetnova.com", "Client@123")
         h = {"Authorization": f"Bearer {d['access_token']}"}
         r = requests.get(f"{API}/team/users", headers=h, timeout=30)
         assert r.status_code == 403, r.text
 
     def test_perf_engineer_blocked_from_alert_write(self):
-        d = _login("perf@greensolutions.ai", "Perf@123")
+        d = _login("perf@assetnova.com", "Perf@123")
         h = {"Authorization": f"Bearer {d['access_token']}"}
         r = requests.post(f"{API}/actions", json={"title": "TEST_QA i14", "site_id": "S00001"},
                           headers=h, timeout=30)
         assert r.status_code == 403, r.text
 
     def test_client_scope_endpoint(self):
-        d = _login("client@greensolutions.ai", "Client@123")
+        d = _login("client@assetnova.com", "Client@123")
         h = {"Authorization": f"Bearer {d['access_token']}"}
         r = requests.get(f"{API}/client/scope", headers=h, timeout=30)
         assert r.status_code == 200, r.text

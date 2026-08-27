@@ -37,12 +37,12 @@ def _token(email):
 
 @pytest.fixture(scope="module")
 def am_headers():
-    return {"Authorization": f"Bearer {_token('assetmgr@greensolutions.ai')}"}
+    return {"Authorization": f"Bearer {_token('assetmgr@assetnova.com')}"}
 
 
 @pytest.fixture(scope="module")
 def admin_headers():
-    return {"Authorization": f"Bearer {_token('admin@greensolutions.ai')}"}
+    return {"Authorization": f"Bearer {_token('admin@assetnova.com')}"}
 
 
 # ---------------- Contact (Book a Demo modal) ----------------
@@ -151,7 +151,7 @@ class TestWorkspaceSwitcher:
     def test_assign_two_roles_and_switch(self, admin_headers):
         users = requests.get(f"{BASE_URL}/api/team/users", headers=admin_headers, timeout=30)
         assert users.status_code == 200
-        target = next(u for u in users.json() if u["email"] == "assetmgr@greensolutions.ai")
+        target = next(u for u in users.json() if u["email"] == "assetmgr@assetnova.com")
         uid = target["id"]
         original = target.get("roles") or [target["role"]]
         try:
@@ -163,7 +163,7 @@ class TestWorkspaceSwitcher:
             )
             assert r.status_code == 200, r.text
 
-            tok = _token("assetmgr@greensolutions.ai")
+            tok = _token("assetmgr@assetnova.com")
             h = {"Authorization": f"Bearer {tok}"}
             mine = requests.get(f"{BASE_URL}/api/rbac/my-roles", headers=h, timeout=30)
             assert mine.status_code == 200

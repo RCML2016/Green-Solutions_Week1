@@ -46,7 +46,7 @@ export default function Landing() {
               </span>
             </h1>
             <p className="mt-8 text-[color:var(--ink-2)] max-w-lg text-[15px] leading-relaxed">
-              Green Solutions transforms renewable energy data into actionable
+              AssetNova transforms renewable energy data into actionable
               intelligence — helping asset owners identify risk, understand
               performance and make faster operational decisions.
             </p>
@@ -81,7 +81,7 @@ export default function Landing() {
                     <span className="w-2 h-2 rounded-full bg-[color:var(--line)]" />
                     <span className="w-2 h-2 rounded-full bg-[color:var(--line)]" />
                     <span className="w-2 h-2 rounded-full bg-[color:var(--line)]" />
-                    <span className="ml-3">GREEN-SOLUTIONS.AI</span>
+                    <span className="ml-3">ASSETNOVA.COM</span>
                   </div>
                   <span className="flex items-center gap-1.5"><span className="pulse-dot" /> LIVE</span>
                 </div>
@@ -175,7 +175,7 @@ export default function Landing() {
               Renewable energy portfolios generate enormous amounts of operational data.
               The challenge isn't collecting it. <strong className="text-[color:var(--ink)]">It's knowing what matters.</strong>
               <p className="mt-4 text-[color:var(--ink-3)]">
-                Green Solutions applies AI reasoning to transform raw asset data into
+                AssetNova applies AI reasoning to transform raw asset data into
                 understandable findings, prioritized actions and decision-ready reports.
               </p>
             </div>
@@ -271,7 +271,7 @@ export default function Landing() {
         <div className="max-w-[1200px] mx-auto grid lg:grid-cols-2 gap-16 items-center">
           <Reveal>
             <div>
-              <div className="eyebrow">THE GREEN SOLUTIONS PLATFORM</div>
+              <div className="eyebrow">THE ASSETNOVA PLATFORM</div>
               <h2 className="font-display text-4xl md:text-5xl mt-4 text-[color:var(--ink)]">
                 From portfolio <br /> visibility to <br />
                 <span style={{ backgroundImage: "linear-gradient(120deg,#0f9d58 0%,#16a34a 40%,#65e6b1 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
@@ -354,7 +354,7 @@ export default function Landing() {
               renewable assets <span className="text-[color:var(--brand-3)]">smarter?</span>
             </h2>
             <p className="text-[color:var(--ink-3)] max-w-lg mx-auto mt-6">
-              Explore the Green Solutions AI platform and see how operational
+              Explore the AssetNova AI platform and see how operational
               intelligence can turn renewable energy data into action.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">

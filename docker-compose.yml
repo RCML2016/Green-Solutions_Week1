@@ -3,22 +3,22 @@ version: "3.9"
 services:
   mongo:
     image: mongo:7
-    container_name: gs-mongo
+    container_name: an-mongo
     ports:
       - "27017:27017"
     volumes:
-      - gs_mongo_data:/data/db
+      - an_mongo_data:/data/db
 
   backend:
     build: ./backend
-    container_name: gs-backend
+    container_name: an-backend
     depends_on:
       - mongo
     env_file:
       - ./backend/.env
     environment:
       MONGO_URL: mongodb://mongo:27017
-      DB_NAME: green_solutions
+      DB_NAME: assetnova
     ports:
       - "8001:8001"
 
@@ -27,11 +27,11 @@ services:
       context: ./frontend
       args:
         REACT_APP_BACKEND_URL: http://localhost:8001
-    container_name: gs-frontend
+    container_name: an-frontend
     depends_on:
       - backend
     ports:
       - "3000:3000"
 
 volumes:
-  gs_mongo_data:
+  an_mongo_data:

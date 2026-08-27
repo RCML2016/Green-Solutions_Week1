@@ -23,8 +23,8 @@ def _login(email, password):
 # ---------------- New demo accounts ----------------
 class TestNewDemoAccounts:
     @pytest.mark.parametrize("email,pwd,role", [
-        ("perf@greensolutions.ai", "Perf@123", "performance_engineer"),
-        ("client@greensolutions.ai", "Client@123", "client_viewer"),
+        ("perf@assetnova.com", "Perf@123", "performance_engineer"),
+        ("client@assetnova.com", "Client@123", "client_viewer"),
     ])
     def test_demo_login_and_role(self, email, pwd, role):
         r = _login(email, pwd)
@@ -121,7 +121,7 @@ class TestWorkspaceSwitch:
         from dotenv import dotenv_values
         be = dotenv_values("/app/backend/.env")
         cl = MongoClient(be["MONGO_URL"])
-        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@greensolutions.ai"})
+        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@assetnova.com"})
         cl.close()
         assert u is not None
         assert "admin" in (u.get("roles") or []), (
@@ -185,7 +185,7 @@ class TestMultiRoleAdminGuards:
 # ---------------- Client scope ----------------
 @pytest.fixture(scope="class")
 def client_user():
-    r = _login("client@greensolutions.ai", "Client@123")
+    r = _login("client@assetnova.com", "Client@123")
     assert r.status_code == 200, r.text
     d = r.json()
     return {"id": d["user"]["id"], "headers": {"Authorization": f"Bearer {d['access_token']}"}}
@@ -277,7 +277,7 @@ class TestClientScope:
 # ---------------- Evidence upload (Emergent Object Storage) ----------------
 @pytest.fixture(scope="class")
 def tech_headers():
-    r = _login("tech@greensolutions.ai", "Tech@123")
+    r = _login("tech@assetnova.com", "Tech@123")
     assert r.status_code == 200, r.text
     d = r.json()
     return {"Authorization": f"Bearer {d['access_token']}"}
@@ -294,7 +294,7 @@ class TestEvidence:
                           headers=tech_headers, timeout=120)
         assert r.status_code == 200, r.text
         d = r.json()
-        assert d["storage_path"].startswith("green-solutions/evidence/")
+        assert d["storage_path"].startswith("assetnova/evidence/")
         assert d["content_type"] == "image/png"
         assert d["alarm_id"] == "AL0000001"
         assert d["note"] == "TEST_QA evidence"

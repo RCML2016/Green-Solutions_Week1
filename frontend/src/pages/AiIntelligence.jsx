@@ -96,7 +96,7 @@ export default function AiIntelligence() {
                   const blob = new Blob([digest.digest], { type: "text/plain" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
-                  a.href = url; a.download = `green-solutions-digest-${new Date().toISOString().slice(0,10)}.txt`;
+                  a.href = url; a.download = `assetnova-digest-${new Date().toISOString().slice(0,10)}.txt`;
                   a.click(); URL.revokeObjectURL(url);
                 }}
                 data-testid="ai-download-digest"

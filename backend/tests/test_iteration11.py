@@ -185,7 +185,7 @@ class TestAuthRegression:
         from pymongo import MongoClient
         be = dotenv_values("/app/backend/.env")
         cl = MongoClient(be["MONGO_URL"])
-        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@greensolutions.ai"})
+        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@assetnova.com"})
         cl.close()
         assert u is not None, "seeded admin missing"
         h = u.get("password_hash") or u.get("hashed_password") or ""

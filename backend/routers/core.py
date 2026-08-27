@@ -397,7 +397,7 @@ async def weekly_digest(user: dict = Depends(get_current_user)):
     ) or "No accepted actions this week."
 
     system = (
-        "You are the Green Solutions AI Digest Writer. In 4-6 short sentences, "
+        "You are the AssetNova AI Digest Writer. In 4-6 short sentences, "
         "summarise the past week for a portfolio owner. Highlight top themes, "
         "biggest risks, and what got resolved. End with one 'Next week focus:' line. "
         "Use plain English, no jargon."

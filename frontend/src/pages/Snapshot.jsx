@@ -26,7 +26,7 @@ export default function Snapshot() {
           <h1 className="font-display text-2xl mt-4 text-[color:var(--ink)]">Snapshot unavailable</h1>
           <p className="text-sm text-[color:var(--ink-3)] mt-2">{error}</p>
           <Link to="/" className="mt-6 inline-block gs-btn-primary text-sm" style={{ padding: "8px 16px" }}>
-            Explore Green Solutions
+            Explore AssetNova
           </Link>
         </div>
       </div>

@@ -1,6 +1,6 @@
-# Green Solutions — Architecture (Feb 2026, iteration 14)
+# AssetNova — Architecture (Feb 2026, iteration 14)
 
-Green Solutions is a full-stack renewable-energy intelligence platform:
+AssetNova is a full-stack renewable-energy intelligence platform:
 **React 19** frontend, **FastAPI + Motor (MongoDB)** backend, **Claude Sonnet 5** for
 AI, **Emergent Object Storage** for field-evidence photos, all deployed behind a
 Kubernetes ingress on `emergentagent.com`.
@@ -256,7 +256,7 @@ sequenceDiagram
     FE->>BE: POST /api/evidence (multipart: file, alarm_id, site_id)
     BE->>BE: validate size ≤8MB + image mimetype
     BE->>TP: run_in_threadpool(storage.put_object)
-    TP->>OBJ: PUT green-solutions/evidence/{uid}/{eid}.jpg
+    TP->>OBJ: PUT assetnova/evidence/{uid}/{eid}.jpg
     OBJ-->>TP: {path, size, etag}
     TP-->>BE: result
     BE->>DB: insert evidence record
@@ -371,7 +371,7 @@ sequenceDiagram
 | `JWT_SECRET`            | backend/.env    | ✅       | Long random string                    |
 | `EMERGENT_LLM_KEY`      | backend/.env    | ✅       | Powers AI + Object Storage            |
 | `INTEGRATION_PROXY_URL` | backend/.env    | ⚠️       | Emergent internal — defaults if unset |
-| `ADMIN_EMAIL`           | backend/.env    | ⛔       | Defaults to `admin@greensolutions.ai` |
+| `ADMIN_EMAIL`           | backend/.env    | ⛔       | Defaults to `admin@assetnova.com` |
 | `ADMIN_PASSWORD`        | backend/.env    | ⛔       | Defaults to `Admin@123`               |
 | `FRONTEND_URL`          | backend/.env    | ⛔       | Used in password reset + snapshot URLs|
 | `REACT_APP_BACKEND_URL` | frontend/.env   | ✅       | Full external URL, no trailing slash  |

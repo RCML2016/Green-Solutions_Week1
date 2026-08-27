@@ -3,7 +3,7 @@
 Session-scoped `storage_key` initialized once at startup. Exposes `put_object`
 (uploads bytes → returns {path, size, etag}) and `get_object` (downloads →
 returns (bytes, content_type)). All paths are prefixed with the app name
-(`green-solutions/...`) to avoid bucket collisions.
+(`assetnova/...`) to avoid bucket collisions.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import logging
 
 import requests
 
-APP_NAME = "green-solutions"
+APP_NAME = "assetnova"
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 

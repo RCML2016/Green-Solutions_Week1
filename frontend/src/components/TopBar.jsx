@@ -59,8 +59,8 @@ export default function TopBar() {
             <span className="w-1.5 h-5 rounded-sm" style={{ background: "var(--brand-3)" }} />
           </div>
           <div className="font-display text-sm">
-            <span className="text-[color:var(--ink)]">GREEN</span>
-            <span className="text-[color:var(--brand-3)] ml-1">SOLUTIONS</span>
+            <span className="text-[color:var(--ink)]">ASSET</span>
+            <span className="text-[color:var(--brand-3)] ml-1">NOVA</span>
           </div>
         </Link>
 

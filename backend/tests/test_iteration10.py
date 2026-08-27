@@ -307,7 +307,7 @@ class TestLegacyRegression:
     def test_auth_me(self, admin_headers):
         r = requests.get(f"{API}/auth/me", headers=admin_headers, timeout=30)
         assert r.status_code == 200
-        assert r.json()["email"] == "admin@greensolutions.ai"
+        assert r.json()["email"] == "admin@assetnova.com"
 
     @pytest.mark.parametrize("path", ["/portfolios", "/alerts", "/snapshots", "/actions",
                                       "/team/users", "/reports/schedule", "/reports/branding"])

@@ -1,4 +1,4 @@
-"""Green Solutions API — thin entry point.
+"""AssetNova API — thin entry point.
 
 All domain logic lives under /app/backend/routers/. This file wires the app,
 runs the on-startup seed of the shipped renewable-energy dataset, and mounts
@@ -34,14 +34,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-app = FastAPI(title="Green Solutions API")
+app = FastAPI(title="AssetNova API")
 
 api_router = APIRouter(prefix="/api")
 
 
 @api_router.get("/")
 async def root():
-    return {"message": "Green Solutions API"}
+    return {"message": "AssetNova API"}
 
 
 @api_router.get("/healthz")
@@ -56,7 +56,7 @@ async def download_source():
     downloads_dir = ROOT_DIR.parent / "downloads"
     if not downloads_dir.exists():
         raise HTTPException(status_code=404, detail="No packaged build found")
-    zips = sorted(downloads_dir.glob("green-solutions-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+    zips = sorted(downloads_dir.glob("assetnova-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not zips:
         raise HTTPException(status_code=404, detail="No packaged build found")
     latest = zips[0]
@@ -110,7 +110,7 @@ async def startup():
     await db.login_attempts.create_index("identifier")
 
     # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@greensolutions.ai").lower()
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@assetnova.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
@@ -148,14 +148,28 @@ async def startup():
     if migrated.modified_count:
         logging.info("[STARTUP] Migrated %d legacy 'user' role -> 'executive'", migrated.modified_count)
 
+    # Rebrand migration: rename any @greensolutions.ai accounts to @assetnova.com
+    # (idempotent — only touches rows that still have the old domain)
+    legacy_users = await db.users.find({"email": {"$regex": "@greensolutions\\.ai$", "$options": "i"}}).to_list(50)
+    for u in legacy_users:
+        new_email = u["email"].lower().replace("@greensolutions.ai", "@assetnova.com")
+        # If the target email doesn't already exist, rename. Otherwise drop the stale row.
+        clash = await db.users.find_one({"email": new_email})
+        if clash and clash["id"] != u["id"]:
+            await db.users.delete_one({"id": u["id"]})
+        else:
+            await db.users.update_one({"id": u["id"]}, {"$set": {"email": new_email}})
+    if legacy_users:
+        logging.info("[STARTUP] Rebranded %d legacy @greensolutions.ai accounts -> @assetnova.com", len(legacy_users))
+
     # Seed demo accounts, one per MVP role — idempotent
     demo_accounts = [
-        {"email": "executive@greensolutions.ai",    "name": "Ellie Executive",       "role": "executive",            "password": "Executive@123"},
-        {"email": "assetmgr@greensolutions.ai",     "name": "Alex Asset Mgr",        "role": "asset_manager",        "password": "Asset@123"},
-        {"email": "ops@greensolutions.ai",          "name": "Omar O&M Mgr",          "role": "om_manager",           "password": "Ops@123"},
-        {"email": "tech@greensolutions.ai",         "name": "Tara Technician",       "role": "technician",           "password": "Tech@123"},
-        {"email": "perf@greensolutions.ai",         "name": "Pat Performance Eng",   "role": "performance_engineer", "password": "Perf@123"},
-        {"email": "client@greensolutions.ai",       "name": "Chris Client Viewer",   "role": "client_viewer",        "password": "Client@123"},
+        {"email": "executive@assetnova.com",    "name": "Ellie Executive",       "role": "executive",            "password": "Executive@123"},
+        {"email": "assetmgr@assetnova.com",     "name": "Alex Asset Mgr",        "role": "asset_manager",        "password": "Asset@123"},
+        {"email": "ops@assetnova.com",          "name": "Omar O&M Mgr",          "role": "om_manager",           "password": "Ops@123"},
+        {"email": "tech@assetnova.com",         "name": "Tara Technician",       "role": "technician",           "password": "Tech@123"},
+        {"email": "perf@assetnova.com",         "name": "Pat Performance Eng",   "role": "performance_engineer", "password": "Perf@123"},
+        {"email": "client@assetnova.com",       "name": "Chris Client Viewer",   "role": "client_viewer",        "password": "Client@123"},
     ]
     for acc in demo_accounts:
         exists = await db.users.find_one({"email": acc["email"]})
@@ -176,7 +190,7 @@ async def startup():
                 await db.users.update_one({"id": exists["id"]}, {"$set": {"roles": [exists.get("role", "executive")]}})
 
     # Give the client_viewer demo a default scope of 20 solar sites
-    client_user = await db.users.find_one({"email": "client@greensolutions.ai"})
+    client_user = await db.users.find_one({"email": "client@assetnova.com"})
     if client_user and not client_user.get("client_scope"):
         sample_sites = await db.fleet_sites.find(
             {"site_type": "Utility-Scale Solar"}, {"_id": 0, "site_id": 1}

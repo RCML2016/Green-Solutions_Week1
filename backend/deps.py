@@ -69,4 +69,4 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
-logger = logging.getLogger("green-solutions")
+logger = logging.getLogger("assetnova")

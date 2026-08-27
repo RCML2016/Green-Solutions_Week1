@@ -1,5 +1,5 @@
 """
-Idempotently seeds the Green Solutions dataset (Sites, Assets, Telemetry, Weather,
+Idempotently seeds the AssetNova dataset (Sites, Assets, Telemetry, Weather,
 Performance, Alarms, Work_Orders) into MongoDB from the Excel workbook shipped in
 /app/backend/data/green_solutions_sample_data.xlsx.
 
@@ -61,7 +61,7 @@ async def seed_if_empty(db) -> Dict[str, int]:
         logging.warning("[SEED] Data file not found at %s — skipping seed.", DATA_FILE)
         return {"missing_file": True}
 
-    logging.info("[SEED] Loading Green Solutions dataset from %s …", DATA_FILE)
+    logging.info("[SEED] Loading AssetNova dataset from %s …", DATA_FILE)
     wb = openpyxl.load_workbook(DATA_FILE, read_only=True, data_only=True)
 
     result: Dict[str, int] = {}

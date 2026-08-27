@@ -1,4 +1,4 @@
-# Green Solutions — Full-Stack Renewable Energy Intelligence Platform
+# AssetNova — Full-Stack Renewable Energy Intelligence Platform
 
 **Stack:** React 19 · FastAPI · MongoDB · Claude Sonnet 5 · Emergent Object Storage
 **Dataset:** 380 sites · 5,473 assets · 60k telemetry rows · 800 alarms · 141 work orders
@@ -44,12 +44,12 @@ Open http://localhost:3000
 ### `backend/.env`
 ```
 MONGO_URL=mongodb://localhost:27017
-DB_NAME=green_solutions
+DB_NAME=assetnova
 JWT_SECRET=change-me-to-a-long-random-string
 EMERGENT_LLM_KEY=sk-emergent-xxxxxxxx        # Powers Claude + Object Storage
 INTEGRATION_PROXY_URL=https://integrations.emergentagent.com   # optional
 FRONTEND_URL=http://localhost:3000
-ADMIN_EMAIL=admin@greensolutions.ai          # optional, default value
+ADMIN_EMAIL=admin@assetnova.com          # optional, default value
 ADMIN_PASSWORD=Admin@123                     # optional, default value
 ```
 
@@ -70,13 +70,13 @@ If deploying, set this to the public URL of your backend (no trailing slash).
 
 | Email                              | Password         | Role                    | Landing              |
 |-----------------------------------|------------------|-------------------------|----------------------|
-| admin@greensolutions.ai            | Admin@123        | admin                   | /admin               |
-| executive@greensolutions.ai        | Executive@123    | executive               | /overview            |
-| assetmgr@greensolutions.ai         | Asset@123        | asset_manager           | /dashboard           |
-| ops@greensolutions.ai              | Ops@123          | om_manager              | /operations          |
-| tech@greensolutions.ai             | Tech@123         | technician              | /my-work             |
-| perf@greensolutions.ai             | Perf@123         | performance_engineer    | /performance         |
-| client@greensolutions.ai           | Client@123       | client_viewer           | /client-portal       |
+| admin@assetnova.com            | Admin@123        | admin                   | /admin               |
+| executive@assetnova.com        | Executive@123    | executive               | /overview            |
+| assetmgr@assetnova.com         | Asset@123        | asset_manager           | /dashboard           |
+| ops@assetnova.com              | Ops@123          | om_manager              | /operations          |
+| tech@assetnova.com             | Tech@123         | technician              | /my-work             |
+| perf@assetnova.com             | Perf@123         | performance_engineer    | /performance         |
+| client@assetnova.com           | Client@123       | client_viewer           | /client-portal       |
 
 The `client_viewer` demo has a scoped default of 20 Utility-Scale Solar sites
 so the Client Portal renders straight away.

@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Green Solutions is a standard 3-tier app: **MongoDB + FastAPI + React**.
+AssetNova is a standard 3-tier app: **MongoDB + FastAPI + React**.
 Pick whichever path fits your setup.
 
 ---
@@ -15,7 +15,7 @@ cp frontend/.env.example frontend/.env
 docker compose up --build
 ```
 
-App: http://localhost:3000  ·  API: http://localhost:8001/api/health
+App: http://localhost:3000  ·  API: http://localhost:8001/api/healthz
 
 The first backend boot ingests `backend/data/green_solutions_sample_data.xlsx`
 (≈ 60k telemetry rows) into MongoDB automatically. Subsequent boots skip.
@@ -64,7 +64,7 @@ Required env vars in production:
 ```bash
 git init
 git add .
-git commit -m "Initial commit — Green Solutions MVP"
+git commit -m "Initial commit — AssetNova MVP"
 git branch -M main
 git remote add origin git@github.com:<you>/<repo>.git
 git push -u origin main

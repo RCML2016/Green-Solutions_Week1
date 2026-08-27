@@ -9,7 +9,7 @@ export default function Platform() {
           One platform. <br /> Every renewable signal, <span className="text-[color:var(--brand-3)]">explained.</span>
         </h1>
         <p className="text-[color:var(--ink-2)] max-w-2xl mt-6">
-          The Green Solutions platform ingests operational data across your renewable
+          The AssetNova platform ingests operational data across your renewable
           portfolio and applies explainable AI to surface what matters, when it matters.
         </p>
 

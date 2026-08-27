@@ -66,7 +66,7 @@ class TestAuthRegression:
     def test_root(self, api_client):
         r = api_client.get(f"{API}/")
         assert r.status_code == 200
-        assert r.json()["message"] == "Green Solutions API"
+        assert r.json()["message"] == "AssetNova API"
 
     def test_me_requires_auth(self, api_client):
         r = requests.get(f"{API}/auth/me")
@@ -91,7 +91,7 @@ class TestAuthRegression:
         from pymongo import MongoClient
         be = dotenv_values("/app/backend/.env")
         cl = MongoClient(be["MONGO_URL"])
-        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@greensolutions.ai"})
+        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@assetnova.com"})
         assert u is not None
         assert u["password_hash"].startswith("$2b$"), u["password_hash"][:10]
         cl.close()

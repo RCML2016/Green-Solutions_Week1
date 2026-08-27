@@ -7,11 +7,11 @@ from dotenv import dotenv_values
 from pymongo import MongoClient
 
 DEMO = {
-    "executive": ("executive@greensolutions.ai", "Executive@123"),
-    "asset_manager": ("assetmgr@greensolutions.ai", "Asset@123"),
-    "om_manager": ("ops@greensolutions.ai", "Ops@123"),
-    "technician": ("tech@greensolutions.ai", "Tech@123"),
-    "admin": ("admin@greensolutions.ai", "Admin@123"),
+    "executive": ("executive@assetnova.com", "Executive@123"),
+    "asset_manager": ("assetmgr@assetnova.com", "Asset@123"),
+    "om_manager": ("ops@assetnova.com", "Ops@123"),
+    "technician": ("tech@assetnova.com", "Tech@123"),
+    "admin": ("admin@assetnova.com", "Admin@123"),
 }
 
 
@@ -246,12 +246,12 @@ class TestAuthPlaybook:
     def test_bcrypt_hash_format(self):
         be = dotenv_values("/app/backend/.env")
         cl = MongoClient(be["MONGO_URL"])
-        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@greensolutions.ai"})
+        u = cl[be["DB_NAME"]].users.find_one({"email": "admin@assetnova.com"})
         cl.close()
         assert u and u["password_hash"].startswith("$2b$"), u["password_hash"][:10] if u else "no admin"
 
     def test_bad_password_401(self, api):
-        r = _login(api, "executive@greensolutions.ai", "WrongPass@999")
+        r = _login(api, "executive@assetnova.com", "WrongPass@999")
         assert r.status_code in (401, 429)
 
     def test_brute_force_lockout(self, api):

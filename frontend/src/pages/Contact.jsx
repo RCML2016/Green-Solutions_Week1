@@ -31,8 +31,8 @@ export default function Contact() {
           </p>
           <div className="mt-8 flex items-center gap-3 text-sm">
             <Mail size={16} className="text-[color:var(--brand-3)]" />
-            <a href="mailto:hello@greensolutions.ai" className="text-[color:var(--ink)] hover:text-[color:var(--brand-3)]">
-              hello@greensolutions.ai
+            <a href="mailto:hello@assetnova.com" className="text-[color:var(--ink)] hover:text-[color:var(--brand-3)]">
+              hello@assetnova.com
             </a>
           </div>
         </div>

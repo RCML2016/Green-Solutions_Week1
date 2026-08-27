@@ -1,7 +1,9 @@
-# Green Solutions — Product Requirements Document
+# AssetNova — Product Requirements Document
 
 ## Original Problem Statement
-> "Create a Website, which can be functional with Login and Live" — recreated from https://rcml2016.github.io/Green-Solutions-MVP-AUG212026/ with balanced Vertical/Horizontal Navigation.
+> "Create a Website, which can be functional with Login and Live" — originally scoped as
+> "Green Solutions MVP", rebranded to **AssetNova** (Feb 2026) once the platform matured
+> beyond solar-only positioning.
 >
 > **Iteration 12 (Feb 2026):** User uploaded a real renewable-energy dataset (Excel workbook)
 > with 380 sites, 5,473 assets, 60,000 telemetry rows, 800 alarms, 141 work orders across 8
@@ -9,6 +11,11 @@
 > random data, (b) simulate live refresh via sliding window, (c) support all categories in
 > the UI, (d) add Site Detail drill-down page, (e) refactor monolithic server.py into
 > per-domain routers, (f) revert theme to the origin site's bright green + white palette.
+>
+> **Iteration 17 (Feb 2026):** Full **AssetNova** rebrand — every "Green Solutions" reference
+> in code, marketing pages, meta tags, browser title, docs, demo email domains, storage
+> bucket prefix, and downloadable zip has been swapped. Deployment scaffolding added
+> (Docker Compose, Dockerfiles, DEPLOY.md, .env.example templates, LICENSE).
 
 ## Personas
 - Renewable asset owner / operator (marketing site + demo dashboard)
@@ -44,7 +51,7 @@
 - `fleet_work_orders` — 141 work orders with status/trade/labor-hours/parts cost.
 
 ## Core Requirements (static)
-1. Recreate Green Solutions marketing site (Hero, From Data to Decision, See/Understand/Act, Solutions, Platform, About/Vision, CTA).
+1. Recreate AssetNova marketing site (Hero, From Data to Decision, See/Understand/Act, Solutions, Platform, About/Vision, CTA).
 2. Balanced vertical + horizontal navigation.
 3. Functional login: register, login, logout, protected dashboard.
 4. Contact form → stores messages in Mongo.

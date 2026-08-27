@@ -116,7 +116,7 @@ export default function Dashboard() {
         pdf.setFontSize(11);
         pdf.setTextColor(104, 120, 112);
         const dateStr = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-        pdf.text(`Green Solutions · ${dateStr}`, 40, 200);
+        pdf.text(`AssetNova · ${dateStr}`, 40, 200);
         if (branding.cover_note) {
           const lines = pdf.splitTextToSize(branding.cover_note, pageW - 80);
           pdf.setFontSize(12);
@@ -131,7 +131,7 @@ export default function Dashboard() {
       const imgH = (canvas.height * pageW) / canvas.width;
       pdf.addImage(img, "PNG", 0, 0, pageW, imgH);
 
-      const fname = `${(branding.company_name || "green-solutions").toLowerCase().replace(/\s+/g, "-")}-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const fname = `${(branding.company_name || "assetnova").toLowerCase().replace(/\s+/g, "-")}-report-${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(fname);
       toast.success("Report exported");
     } catch { toast.error("Export failed"); }
