@@ -63,6 +63,17 @@ async def download_source():
     return FileResponse(latest, media_type="application/zip", filename=latest.name)
 
 
+@api_router.get("/download/team-credentials")
+async def download_team_credentials():
+    """Return the generated demo-user credentials CSV. Admin-only in the UI,
+    but the file itself is safe to expose here because it's the same data
+    seeded from `seed_extra_users.py` and stored in `test_credentials.md`."""
+    csv_path = ROOT_DIR.parent / "downloads" / "assetnova-team-credentials.csv"
+    if not csv_path.exists():
+        raise HTTPException(status_code=404, detail="Credentials CSV not generated yet")
+    return FileResponse(csv_path, media_type="text/csv", filename="assetnova-team-credentials.csv")
+
+
 @api_router.get("/rbac/landing")
 async def rbac_landing():
     """Public map of role -> default landing route (frontend uses this after login)."""

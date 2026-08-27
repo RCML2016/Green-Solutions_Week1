@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ShieldCheck, Users as UsersIcon, Loader2, ArrowRight, Database, Bell, Sparkles, Inbox, Mail,
+  ShieldCheck, Users as UsersIcon, Loader2, ArrowRight, Database, Bell, Sparkles, Inbox, Mail, Download,
 } from "lucide-react";
 import { ROLES } from "@/lib/roles";
 
@@ -79,15 +79,27 @@ export default function Administration() {
 
   return (
     <div className="px-6 lg:px-14 py-10 max-w-full overflow-x-hidden" data-testid="admin-page">
-      <div className="eyebrow flex items-center gap-2">
-        <ShieldCheck size={12} /> ADMINISTRATION
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="eyebrow flex items-center gap-2">
+            <ShieldCheck size={12} /> ADMINISTRATION
+          </div>
+          <h1 className="font-display text-3xl md:text-4xl mt-3 text-[color:var(--ink)]">
+            Platform <span className="text-[color:var(--brand-3)]">controls</span>
+          </h1>
+          <p className="text-[color:var(--ink-3)] text-sm mt-2">
+            Users, roles, integrations and configuration for the AssetNova platform.
+          </p>
+        </div>
+        <a
+          href={`${process.env.REACT_APP_BACKEND_URL}/api/download/team-credentials`}
+          download
+          data-testid="admin-download-credentials"
+          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-4 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
+        >
+          <Download size={14} /> Team credentials · CSV
+        </a>
       </div>
-      <h1 className="font-display text-3xl md:text-4xl mt-3 text-[color:var(--ink)]">
-        Platform <span className="text-[color:var(--brand-3)]">controls</span>
-      </h1>
-      <p className="text-[color:var(--ink-3)] text-sm mt-2">
-        Users, roles, integrations and configuration for the AssetNova platform.
-      </p>
 
       {/* System KPIs */}
       <div className="grid md:grid-cols-4 gap-4 mt-8">
