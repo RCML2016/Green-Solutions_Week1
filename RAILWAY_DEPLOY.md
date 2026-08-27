@@ -143,6 +143,12 @@ Cheaper alternatives after the trial:
 
 ## Troubleshooting
 
+**FormSubmit email verification** → On the first `Book a Demo` submission after
+deploy, FormSubmit sends a one-time verification email to `NOTIFICATION_EMAIL`.
+Click the link inside it — all future submissions land in your inbox
+automatically. If you never receive the verification email, check spam or
+switch to Resend (see `backend/routers/core.py::_notify_lead`).
+
 **Backend won't start** → Check backend logs for `MONGO_URL` — it must be
 prefixed `mongodb://` or `mongodb+srv://`. Railway auto-injects it correctly if
 you referenced it via `${{MongoDB.MONGO_URL}}`.

@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ShieldCheck, Users as UsersIcon, Loader2, ArrowRight, Database, Bell, Sparkles,
+  ShieldCheck, Users as UsersIcon, Loader2, ArrowRight, Database, Bell, Sparkles, Inbox, Mail,
 } from "lucide-react";
 import { ROLES } from "@/lib/roles";
 
@@ -16,18 +16,21 @@ export default function Administration() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [health, setHealth] = useState(null);
+  const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scopeUser, setScopeUser] = useState(null); // for client scope editor modal
 
   const load = async () => {
     setLoading(true);
     try {
-      const [u, h] = await Promise.all([
+      const [u, h, l] = await Promise.all([
         api.get("/team/users"),
         api.get("/healthz"),
+        api.get("/admin/leads?limit=25").catch(() => ({ data: { leads: [] } })),
       ]);
       setUsers(u.data);
       setHealth(h.data);
+      setLeads(l.data.leads || []);
     } catch (e) {
       if (user?.role === "admin") toast.error(formatApiError(e));
     } finally {
@@ -120,6 +123,53 @@ export default function Administration() {
           <div className="font-display text-xl mt-2 text-[color:var(--ink)]">Claude Sonnet 5</div>
           <div className="text-[11px] text-[color:var(--ink-3)] mt-1">via Emergent Universal Key</div>
         </div>
+      </div>
+
+      {/* Leads Inbox — always-on, DB-backed, works whether external email push succeeded or not */}
+      <div className="gs-card p-6 mt-8" data-testid="admin-leads-inbox">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[color:var(--brand-tint)] flex items-center justify-center">
+              <Inbox size={16} className="text-[color:var(--brand-3)]" />
+            </div>
+            <div>
+              <div className="font-mono text-[10px] text-[color:var(--ink-3)]">LEADS INBOX · BOOK-A-DEMO</div>
+              <div className="text-sm text-[color:var(--ink)] mt-0.5">{leads.length} recent submissions · newest first</div>
+            </div>
+          </div>
+          <div className="text-[10px] font-mono text-[color:var(--ink-3)]">STORED IN <span className="text-[color:var(--brand-3)]">contact_messages</span></div>
+        </div>
+
+        {leads.length === 0 ? (
+          <div className="text-center py-10 text-sm text-[color:var(--ink-3)]" data-testid="admin-leads-empty">
+            <Mail size={20} className="mx-auto text-[color:var(--ink-3)] mb-2 opacity-60" />
+            No leads yet — this inbox fills up as visitors hit "Book a Demo" on the marketing site.
+          </div>
+        ) : (
+          <div className="divide-y divide-[color:var(--line)]">
+            {leads.slice(0, 8).map((lead) => (
+              <div key={lead.id} className="py-3 flex items-start justify-between gap-4" data-testid={`admin-lead-${lead.id}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-sm text-[color:var(--ink)]">
+                    <span className="font-medium">{lead.name}</span>
+                    <a href={`mailto:${lead.email}`} className="text-[color:var(--brand-3)] hover:underline text-xs">{lead.email}</a>
+                  </div>
+                  <div className="text-xs text-[color:var(--ink-2)] mt-1 line-clamp-2 whitespace-pre-wrap">
+                    {lead.message}
+                  </div>
+                </div>
+                <div className="text-[10px] font-mono text-[color:var(--ink-3)] whitespace-nowrap">
+                  {new Date(lead.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </div>
+              </div>
+            ))}
+            {leads.length > 8 && (
+              <div className="pt-3 text-[11px] font-mono text-[color:var(--ink-3)]">
+                + {leads.length - 8} more · fetching latest 25 from DB
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Users table */}

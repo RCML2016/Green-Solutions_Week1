@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles, ArrowUpRight, Check, Activity, Workflow, BarChart3, Cpu, Lightbulb } from "lucide-react";
 import { useEffect, useRef } from "react";
+import AnimatedCounter from "@/components/AnimatedCounter";
 
 function Reveal({ children, delay = 0 }) {
   const ref = useRef(null);
@@ -36,40 +37,50 @@ export default function Landing() {
         <div className="absolute inset-0 gs-grain opacity-50 pointer-events-none" />
         <div className="relative max-w-[1200px] mx-auto px-6 lg:px-10 grid lg:grid-cols-2 gap-16 items-center">
           <div>
-            <div className="eyebrow flex items-center gap-2">
-              <span className="pulse-dot" /> AI-POWERED SUSTAINABILITY INTELLIGENCE
-            </div>
-            <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[1.02] mt-6 text-[color:var(--ink)]">
-              Make every <br />renewable asset <br />
-              <span style={{ backgroundImage: "linear-gradient(120deg,#0f9d58 0%,#16a34a 40%,#65e6b1 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
-                more intelligent.
-              </span>
-            </h1>
-            <p className="mt-8 text-[color:var(--ink-2)] max-w-lg text-[15px] leading-relaxed">
-              AssetNova transforms renewable energy data into actionable
-              intelligence — helping asset owners identify risk, understand
-              performance and make faster operational decisions.
-            </p>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <Link to="/platform" className="gs-btn-primary" data-testid="hero-explore-platform">
-                Explore Platform <ArrowRight size={16} />
-              </Link>
-              <Link to="/how-it-works" className="gs-btn-ghost" data-testid="hero-how-it-works">
-                See How It Works
-              </Link>
-            </div>
-            <div className="mt-14 grid grid-cols-3 gap-6 max-w-lg border-t border-[color:var(--line)] pt-8">
-              {[
-                { k: "AI", v: "Asset Intelligence" },
-                { k: "360°", v: "Portfolio Visibility" },
-                { k: "24/7", v: "Intelligent Monitoring" },
-              ].map((s) => (
-                <div key={s.k}>
-                  <div className="font-display text-2xl text-[color:var(--ink)]">{s.k}</div>
-                  <div className="text-[11px] font-mono text-[color:var(--ink-3)] mt-1">{s.v}</div>
-                </div>
-              ))}
-            </div>
+            <Reveal delay={0}>
+              <div className="eyebrow flex items-center gap-2">
+                <span className="pulse-dot" /> AI-POWERED SUSTAINABILITY INTELLIGENCE
+              </div>
+            </Reveal>
+            <Reveal delay={120}>
+              <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[1.02] mt-6 text-[color:var(--ink)]">
+                Make every <br />renewable asset <br />
+                <span style={{ backgroundImage: "linear-gradient(120deg,#0f9d58 0%,#16a34a 40%,#65e6b1 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>
+                  more intelligent.
+                </span>
+              </h1>
+            </Reveal>
+            <Reveal delay={280}>
+              <p className="mt-8 text-[color:var(--ink-2)] max-w-lg text-[15px] leading-relaxed">
+                AssetNova transforms renewable energy data into actionable
+                intelligence — helping asset owners identify risk, understand
+                performance and make faster operational decisions.
+              </p>
+            </Reveal>
+            <Reveal delay={400}>
+              <div className="mt-10 flex flex-wrap gap-4">
+                <Link to="/platform" className="gs-btn-primary" data-testid="hero-explore-platform">
+                  Explore Platform <ArrowRight size={16} />
+                </Link>
+                <Link to="/how-it-works" className="gs-btn-ghost" data-testid="hero-how-it-works">
+                  See How It Works
+                </Link>
+              </div>
+            </Reveal>
+            <Reveal delay={520}>
+              <div className="mt-14 grid grid-cols-3 gap-6 max-w-lg border-t border-[color:var(--line)] pt-8">
+                {[
+                  { k: <AnimatedCounter to={380} suffix="+" />, v: "Sites Monitored" },
+                  { k: <AnimatedCounter to={5473} format={(v) => `${(v / 1000).toFixed(1)}K`} />, v: "Assets Tracked" },
+                  { k: <AnimatedCounter to={60} suffix="K" />, v: "Data Points / Day" },
+                ].map((s, i) => (
+                  <div key={i} data-testid={`hero-stat-${i}`}>
+                    <div className="font-display text-3xl text-[color:var(--ink)] tabular-nums">{s.k}</div>
+                    <div className="text-[11px] font-mono text-[color:var(--ink-3)] mt-1">{s.v}</div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
           </div>
 
           {/* Dashboard mock — light glass */}

@@ -8,6 +8,7 @@ import random
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException, Depends
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
@@ -26,6 +27,31 @@ from models import (
 from rbac import role_required
 
 router = APIRouter(tags=["core"])
+log = logging.getLogger("assetnova")
+
+
+async def _notify_lead(name: str, email: str, message: str) -> None:
+    """Forward the lead to the founder's inbox via FormSubmit's AJAX endpoint.
+    Silent no-op if NOTIFICATION_EMAIL is unset — DB write is still the source
+    of truth. FormSubmit requires a one-time verification click on first use.
+    """
+    to = os.environ.get("NOTIFICATION_EMAIL")
+    if not to:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            await client.post(
+                f"https://formsubmit.co/ajax/{to}",
+                json={
+                    "name": name,
+                    "email": email,
+                    "message": message,
+                    "_subject": "AssetNova — new demo request",
+                    "_template": "table",
+                },
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning("Lead-notify failed: %s", e)
 
 
 # ---------------- Contact ----------------
@@ -39,7 +65,17 @@ async def contact(payload: ContactRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.contact_messages.insert_one(doc)
+    await _notify_lead(payload.name, payload.email, payload.message)
     return {"ok": True, "message": "Thanks — we'll be in touch soon."}
+
+
+@router.get("/admin/leads")
+async def list_leads(limit: int = 50, _user: dict = Depends(require_admin)):
+    """Admin view of all contact_messages — the always-on lead inbox that
+    works regardless of whether the FormSubmit notification succeeded."""
+    limit = max(1, min(limit, 200))
+    docs = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"leads": docs, "count": len(docs)}
 
 
 # ---------------- Legacy portfolio metrics (kept for backward compat) ----------------
