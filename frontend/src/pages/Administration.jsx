@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, formatApiError } from "@/lib/api";
+import { api, formatApiError, downloadAuthed } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate, Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -92,30 +92,33 @@ export default function Administration() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2" data-testid="admin-downloads">
-          <a
-            href={`${process.env.REACT_APP_BACKEND_URL}/api/download/team-credentials`}
-            download
-            data-testid="admin-download-credentials"
-            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-3.5 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
+          {[
+            { path: "/download/team-credentials", label: "Credentials · CSV", test: "admin-download-credentials" },
+            { path: "/download/workflows-pdf",    label: "Workflows · PDF",   test: "admin-download-workflows" },
+            { path: "/download/test-cases-xlsx",  label: "Test Cases · XLSX", test: "admin-download-testcases" },
+          ].map((d) => (
+            <button
+              key={d.path}
+              onClick={async () => {
+                try {
+                  await downloadAuthed(d.path);
+                } catch (e) {
+                  toast.error(formatApiError(e));
+                }
+              }}
+              data-testid={d.test}
+              className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-3.5 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
+            >
+              <Download size={13} /> {d.label}
+            </button>
+          ))}
+          <Link
+            to="/qa-tracker"
+            data-testid="admin-open-qa-tracker"
+            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--brand)] bg-[color:var(--brand-3)] text-white px-3.5 py-2 text-xs font-mono hover:opacity-90 transition shadow-sm"
           >
-            <Download size={13} /> Credentials · CSV
-          </a>
-          <a
-            href={`${process.env.REACT_APP_BACKEND_URL}/api/download/workflows-pdf`}
-            download
-            data-testid="admin-download-workflows"
-            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-3.5 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
-          >
-            <Download size={13} /> Workflows · PDF
-          </a>
-          <a
-            href={`${process.env.REACT_APP_BACKEND_URL}/api/download/test-cases-xlsx`}
-            download
-            data-testid="admin-download-testcases"
-            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-white px-3.5 py-2 text-xs font-mono text-[color:var(--ink-2)] hover:border-[color:var(--brand)] hover:text-[color:var(--brand-3)] transition shadow-sm"
-          >
-            <Download size={13} /> Test Cases · XLSX
-          </a>
+            <Sparkles size={13} /> QA Tracker
+          </Link>
         </div>
       </div>
 
