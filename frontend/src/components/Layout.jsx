@@ -1,12 +1,14 @@
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Layout() {
+  const { user } = useAuth();
   return (
     <div className="min-h-screen gs-canvas text-[color:var(--ink)]">
       <Sidebar />
-      <div className="lg:pl-[240px]">
+      <div className={user ? "lg:pl-[240px]" : ""}>
         <TopBar />
         <main className="min-h-[calc(100vh-72px)]">
           <Outlet />

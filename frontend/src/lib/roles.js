@@ -1,16 +1,17 @@
 /**
- * Role-based navigation config.
+ * Navigation config — split into MARKETING (public visitors) and APP (logged-in).
  *
- * `nav` — array of nav sections rendered in the sidebar.
- *         Each item is only shown if the user's role is in its `allow` list.
- *         Admin sees everything (super-role).
+ * MARKETING_NAV → horizontal top navbar for logged-out visitors.
+ * APP_NAV       → 8-item application nav for logged-in users.
+ *                 Role-filtered via `visibleAppItems(user)`.
  *
- * `landing` — default landing route per role, used for post-login redirect.
+ * Technician / Performance Engineer / Client Viewer land on their own workspace
+ * page and see ONLY that page in the sidebar (per user's spec).
  */
 import {
   Home, LayoutDashboard, Bell, Wrench, ClipboardList, Users, MessageSquare,
   Layers, Cpu, Workflow, Mail, UserPlus, ShieldCheck, Briefcase, Activity,
-  LineChart, Eye,
+  LineChart, Eye, Info, PhoneCall, Sparkles, Package,
 } from "lucide-react";
 
 export const ROLES = {
@@ -31,66 +32,53 @@ export const LANDING = {
   performance_engineer: "/performance",
   client_viewer: "/client-portal",
   admin: "/admin",
-  // legacy fallbacks
   user: "/overview",
   owner: "/dashboard",
   compliance: "/reports",
 };
 
-// Section headers preserved; links ordered Monitor → Diagnose → Optimize within each section.
-export const NAV = [
-  // PUBLIC / MARKETING — always visible
-  { section: "PLATFORM", public: true, items: [
-    { to: "/",             label: "Overview",     icon: Home },
-    { to: "/platform",     label: "Platform",     icon: Layers },
-    { to: "/solutions",    label: "Solutions",    icon: Cpu },
-    { to: "/how-it-works", label: "How It Works", icon: Workflow },
-  ]},
-
-  // OPERATIONS — role-gated
-  { section: "OPERATIONS", items: [
-    // MONITOR
-    { to: "/overview",       label: "Executive Overview",   icon: Briefcase,
-      allow: ["executive", "asset_manager", "om_manager"] },
-    { to: "/dashboard",      label: "Live Dashboard",       icon: LayoutDashboard,
-      allow: ["executive", "asset_manager", "om_manager", "performance_engineer"] },
-    { to: "/operations",     label: "Operations Center",    icon: Activity,
-      allow: ["om_manager", "asset_manager"] },
-    { to: "/my-work",        label: "My Work",              icon: ClipboardList,
-      allow: ["technician", "om_manager"] },
-    { to: "/performance",    label: "Performance Analytics", icon: LineChart,
-      allow: ["performance_engineer", "asset_manager"] },
-    { to: "/client-portal",  label: "Client Portal",        icon: Eye,
-      allow: ["client_viewer"] },
-
-    // DIAGNOSE
-    { to: "/alerts",  label: "Alert Center", icon: Bell,
-      allow: ["asset_manager", "om_manager", "technician", "performance_engineer"] },
-
-    // OPTIMIZE
-    { to: "/reports", label: "Report Scheduler", icon: Mail,
-      allow: ["executive", "asset_manager", "om_manager"] },
-    { to: "/team",    label: "Team",              icon: UserPlus,
-      allow: [] },  // admin only via super-role
-    { to: "/admin",   label: "Administration",    icon: ShieldCheck,
-      allow: [] },
-  ]},
-
-  { section: "COMPANY", public: true, items: [
-    { to: "/about",   label: "About",   icon: Users },
-    { to: "/contact", label: "Contact", icon: MessageSquare },
-  ]},
+/** Public / marketing navigation — visible in the top bar for logged-out users. */
+export const MARKETING_NAV = [
+  { to: "/",             label: "Home",         icon: Home,     end: true },
+  { to: "/platform",     label: "Platform",     icon: Layers },
+  { to: "/solutions",    label: "Solutions",    icon: Cpu },
+  { to: "/how-it-works", label: "How It Works", icon: Workflow },
+  { to: "/about",        label: "About",        icon: Info },
+  { to: "/contact",      label: "Contact",      icon: MessageSquare },
 ];
 
-/** Returns visible items for a section given the current user. */
-export function visibleItems(section, user) {
-  return section.items.filter((it) => {
-    if (section.public) return true;
-    if (!user) return false;
-    if (user.role === "admin") return true; // admin sees everything
-    if (!it.allow) return true;
-    return it.allow.includes(user.role);
-  });
+/**
+ * Application navigation — the 8 canonical items after login.
+ * Each item's `allow` list determines which roles see it.
+ * Admin is a super-role and always sees everything.
+ */
+export const APP_NAV = [
+  { to: "/overview",     label: "Overview",         icon: Briefcase,       allow: ["executive", "asset_manager", "om_manager"] },
+  { to: "/dashboard",    label: "Portfolio",        icon: LayoutDashboard, allow: ["executive", "asset_manager", "om_manager", "performance_engineer"] },
+  { to: "/assets",       label: "Assets",           icon: Package,         allow: ["asset_manager", "om_manager", "performance_engineer"] },
+  { to: "/ai",           label: "AI Intelligence",  icon: Sparkles,        allow: ["executive", "asset_manager", "om_manager", "performance_engineer", "technician"] },
+  { to: "/operations",   label: "Operations",       icon: Activity,        allow: ["om_manager", "asset_manager"] },
+  { to: "/work-orders",  label: "Work Orders",      icon: Wrench,          allow: ["om_manager", "technician", "asset_manager"] },
+  { to: "/reports",      label: "Reports",          icon: Mail,            allow: ["executive", "asset_manager", "om_manager"] },
+  { to: "/admin",        label: "Administration",   icon: ShieldCheck,     allow: [] },  // admin only via super-role
+];
+
+/**
+ * Solo-workspace roles: they see ONLY their own landing page in the sidebar.
+ * Everything else is hidden from their nav (walled-garden UX).
+ */
+const SOLO_NAV = {
+  technician:           [{ to: "/my-work",        label: "My Work",           icon: ClipboardList }],
+  performance_engineer: [{ to: "/performance",    label: "Performance",       icon: LineChart }],
+  client_viewer:        [{ to: "/client-portal",  label: "Client Portal",     icon: Eye }],
+};
+
+/** Returns the app nav items visible to the current user, role-filtered. */
+export function visibleAppItems(user) {
+  if (!user) return [];
+  if (user.role === "admin") return APP_NAV;                     // super-role sees all 8
+  if (SOLO_NAV[user.role]) return SOLO_NAV[user.role];           // walled garden
+  return APP_NAV.filter((it) => it.allow?.includes(user.role));
 }
 
 export function landingFor(role) {

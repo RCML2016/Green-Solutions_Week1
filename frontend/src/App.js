@@ -27,6 +27,9 @@ import MyWork from "@/pages/MyWork";
 import Administration from "@/pages/Administration";
 import PerformanceAnalytics from "@/pages/PerformanceAnalytics";
 import ClientPortal from "@/pages/ClientPortal";
+import Assets from "@/pages/Assets";
+import AiIntelligence from "@/pages/AiIntelligence";
+import WorkOrders from "@/pages/WorkOrders";
 import { landingFor } from "@/lib/roles";
 
 function Protected({ children, allow }) {
@@ -40,7 +43,21 @@ function Protected({ children, allow }) {
   }
   if (!user) return <Navigate to="/login" replace />;
   // Admin is a super-role — always allowed
-  if (allow && user.role !== "admin" && !allow.includes(user.role)) {
+  if (user.role === "admin") return children;
+  // Solo-workspace roles are walled — only their landing page is reachable
+  const soloLanding = {
+    technician: "/my-work",
+    performance_engineer: "/performance",
+    client_viewer: "/client-portal",
+  };
+  if (soloLanding[user.role]) {
+    const target = soloLanding[user.role];
+    if (window.location.pathname !== target && !window.location.pathname.startsWith("/site/")) {
+      return <Navigate to={target} replace />;
+    }
+    return children;
+  }
+  if (allow && !allow.includes(user.role)) {
     return <Navigate to={landingFor(user.role)} replace />;
   }
   return children;
@@ -82,6 +99,15 @@ function App() {
             } />
             <Route path="/client-portal" element={
               <Protected allow={["client_viewer"]}><ClientPortal /></Protected>
+            } />
+            <Route path="/assets" element={
+              <Protected allow={["asset_manager", "om_manager", "performance_engineer"]}><Assets /></Protected>
+            } />
+            <Route path="/ai" element={
+              <Protected allow={["executive", "asset_manager", "om_manager", "performance_engineer", "technician"]}><AiIntelligence /></Protected>
+            } />
+            <Route path="/work-orders" element={
+              <Protected allow={["om_manager", "technician", "asset_manager"]}><WorkOrders /></Protected>
             } />
 
             <Route path="/reports" element={

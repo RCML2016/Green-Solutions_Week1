@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 15 (nav reorganization) tested end-to-end. Backend regression: 244/245 existing tests pass (1 flaky perf assertion under xdist load, passes in isolation) + 9 new iteration-15 tests pass (contact/book-demo payload, /fleet/sites+site detail for Assets, /fleet/work-orders totals+filter, /reports/weekly-digest, multi-role switch). Frontend: marketing-vs-app nav split verified (logged-out = 6 top links + Book a Demo + Login + Get Started, zero sidebar, main.left=0; logged-in = sidebar with main.left=240 and zero marketing links). All 7 roles show exactly the expected sidebar sets (asset_manager/om_manager 7, admin 8, technician/perf/client 1 each). All 3 new pages render and work (Assets 1,341 loaded / type chips / search / drill-in; AI Intelligence digest generated via POST /api/reports/weekly-digest with alerts_count+actions_count and chat replies streamed; Work Orders 141 rows, tile filter + drill-in). Cross-role blocking correct for executive/client_viewer/asset_manager. Workspace switcher works (asset_manager+om_manager, switch -> /operations, badge updates). All 13 app pages render for admin with no console errors; mobile 390x844 /my-work fine (no sidebar, 0 overflow). 4 defects found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/fleet/work-orders", "issue": "status_breakdown returns 4 statuses (Created 35, Assigned 34, Dispatched 33, Resolved 39 = 141) but the new Work Orders UI only renders 3 tiles, so 34 'Assigned' WOs are invisible/unfilterable (tiles sum 107 != 141)."},
+      {"endpoint": "/api/auth/login", "issue": "login response user object omits the `roles` array (only `role`), so the frontend needs an extra /rbac/my-roles round-trip on every mount to decide whether to show the switcher."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TopBar (marketing, mobile 390px)", "issue": "Header overflows viewport by 79px: 'Get Started' is clipped (326..423) and the hamburger [data-testid=topbar-menu-toggle] sits entirely off-screen at 435..469, so mobile visitors cannot open the marketing nav or the mobile Book-a-Demo entry. topbar-register-btn is rendered at 390px despite `hidden sm:inline-flex` intent; header scrollWidth 469 vs clientWidth 390.", "selector": "[data-testid=topbar-menu-toggle], [data-testid=topbar-register-btn]", "priority": "HIGH"},
+      {"component": "BookDemoModal", "issue": "Modal state is never reset. After a successful submit + close, reopening 'Book a Demo' shows the old [data-testid=book-demo-done] success screen and the form is unreachable (form count 0). Typed values also persist after closing via X ('TEST_QA Stale' still in name field). Fix: reset form/done in a useEffect on `open` (or unmount the modal).", "selector": "[data-testid=book-demo-modal]", "priority": "HIGH"},
+      {"component": "WorkOrders", "issue": "Status tiles hardcode Created/Dispatched/Resolved; the 'Assigned' status (34 of 141 WOs) has no tile, so the tiles do not sum to the headline total and Assigned cannot be filtered. Render tiles from data.status_breakdown instead.", "selector": "[data-testid^=wo-status-]", "priority": "MEDIUM"},
+      {"component": "OnboardingTour", "issue": "Tour backdrop [data-testid=tour-backdrop] (z-50) covers the sidebar (z-30) and intercepts all sidebar-link clicks until the tour is skipped — nav is unusable for a first-time session.", "selector": "[data-testid=tour-backdrop]", "priority": "MEDIUM"},
+      {"component": "Sidebar + TopBar profile menu", "issue": "Duplicate workspace switchers for multi-role users (sidebar WorkspaceSwitcher and [data-testid=profile-workspace-switcher]) — pick one.", "selector": "[data-testid=profile-workspace-switcher]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Solo-workspace (walled garden) route enforcement", "issue": "Sidebar hides non-landing items for solo roles, but App.js Protected `allow` lists still admit them, so URL access leaks: performance_engineer -> /assets loads Assets; technician -> /work-orders and /ai load those pages. Spec says these roles should be redirected to their landing (/performance, /my-work).", "affected_selectors": ["[data-testid=assets-page]", "[data-testid=work-orders-page]", "[data-testid=ai-intelligence-page]"]},
+      {"flow": "Assets browse/search", "issue": "Only 1,341 of 5,473 assets are loaded (first 50 sites) and the table caps at 500 rows, so search/type counts silently cover a subset of the fleet while the page copy implies fleet-wide browse. Documented as MVP, but the heading/search should say 'searching loaded subset' or move filtering server-side.", "affected_selectors": ["[data-testid=assets-search]", "[data-testid=assets-page]"]}
+    ],
+    "design_issues": [
+      {"screen": "Marketing home @390px", "issues": ["Sticky header content overflows horizontally (body scrollWidth > clientWidth by 79px)", "Get Started CTA visually truncated at the right edge"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration15.py",
+    "/app/test_reports/pytest/pytest_results_i15.xml"
+  ],
+  "action_items": [
+    "Fix mobile marketing header at 390px: hide Get Started below sm and keep [data-testid=topbar-menu-toggle] inside the viewport (currently unreachable).",
+    "Reset BookDemoModal form + done state when `open` toggles (reopen currently shows stale success screen / stale values).",
+    "Render Work Orders status tiles from data.status_breakdown so the 'Assigned' bucket (34 WOs) is shown and filterable; tiles currently sum to 107 of 141.",
+    "Decide and enforce walled-garden at route level: add solo-role redirects (perf_engineer -> /performance for /assets; technician -> /my-work for /work-orders and /ai) or update the spec.",
+    "Raise OnboardingTour backdrop z-index handling so the sidebar remains clickable (or scope backdrop to the main content area).",
+    "Optional: include `roles` in the login/auth-me user payload to avoid the extra /rbac/my-roles call."
+  ],
+  "critical_code_review_comments": [
+    "roles.js visibleAppItems() and App.js Protected allow-lists are two independent sources of truth for role access — SOLO_NAV hides links while allow-lists still grant route access. Derive route guards from the same nav config to prevent drift.",
+    "Assets.jsx fires 50 parallel /fleet/sites/{id} requests on mount (~5-8s first paint) and does all filtering client-side; move type/search filtering to a server endpoint before scaling past the 50-site cap.",
+    "WorkOrders.jsx hardcodes the status list (STATUS_STYLES keys) while the backend enumerates 4 statuses — derive from API response.",
+    "BookDemoModal.jsx uses `if (!open) return null` while staying mounted, so useState survives close — a classic stale-modal bug; reset via useEffect([open]) or key the component."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration15.py"],
+  "success_rate": {"backend": "99.6% (253/254; 1 load-contention flake)", "frontend": "85% (nav split, role scoping, 3 new pages, switcher all pass; 4 UI defects)"},
+  "seed_data_creation": "Contact records created via /api/contact with TEST_QA names (qa_demo_i15@example.com, qa_bookdemo_i15@example.com, qa_reset_i15@example.com). assetmgr@greensolutions.ai was temporarily given roles [asset_manager, om_manager] for switcher testing and reverted to [asset_manager] afterwards.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "/app/memory/test_credentials.md — all 7 demo accounts logged in successfully",
+  "context_for_next_testing_agent": "New pytest file /app/backend/tests/test_iteration15.py covers the data sources for the 3 new pages plus multi-role switching (9 tests, all passing). Known flaky: tests/test_iteration14.py::TestEvidenceThreadpool::test_event_loop_not_blocked_during_large_upload fails only when the full suite runs in parallel (36s healthz latency) — passes standalone. When driving the UI, always dismiss the onboarding tour ('Skip tour') right after login or the tour backdrop blocks sidebar clicks. Assets page takes up to ~60s to populate its table on first load. Retest after fixes: mobile marketing header at 390px, BookDemoModal reopen state, WorkOrders 'Assigned' tile, solo-role route redirects.",
+  "rca_of_the_issue": "BookDemoModal: component stays mounted in TopBar and short-circuits render with `if (!open) return null`, so useState({form, done}) persists across close/open — success screen and typed values leak into the next open. Mobile header: TopBar right cluster (LIVE, theme, Book a Demo, Login, Get Started, hamburger) exceeds 390px because topbar-register-btn is not actually hidden at that width, pushing the menu toggle past the viewport. WorkOrders tiles: the status array is hardcoded to 3 values while /api/fleet/work-orders returns 4 statuses including Assigned (34). Solo-role leakage: nav visibility (SOLO_NAV in roles.js) and route guards (allow lists in App.js) are maintained separately."
+}

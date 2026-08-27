@@ -1,21 +1,15 @@
 import { NavLink, Link, useNavigate } from "react-router-dom";
-import { LogIn, LogOut, User, Menu, Sun, Moon, KeyRound, ChevronDown, Check } from "lucide-react";
+import { LogIn, LogOut, User, Menu, Sun, Moon, KeyRound, ChevronDown, Check, PhoneCall } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { ROLES, landingFor } from "@/lib/roles";
+import { ROLES, landingFor, MARKETING_NAV } from "@/lib/roles";
 import { toast } from "sonner";
 import PasswordChangeModal from "./PasswordChangeModal";
+import BookDemoModal from "./BookDemoModal";
 
-const TOP_LINKS = [
-  { to: "/", label: "Home", end: true },
-  { to: "/platform", label: "Platform" },
-  { to: "/solutions", label: "Solutions" },
-  { to: "/how-it-works", label: "How It Works" },
-  { to: "/about", label: "About" },
-  { to: "/contact", label: "Contact" },
-];
+const TOP_LINKS = MARKETING_NAV.map((l) => ({ to: l.to, label: l.label, end: l.end }));
 
 export default function TopBar() {
   const { user, logout, switchWorkspace } = useAuth();
@@ -24,6 +18,7 @@ export default function TopBar() {
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
+  const [showBookDemo, setShowBookDemo] = useState(false);
   const [myRoles, setMyRoles] = useState([]);
   const profileRef = useRef(null);
 
@@ -70,7 +65,7 @@ export default function TopBar() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
-          {TOP_LINKS.map((l) => (
+          {!user && TOP_LINKS.map((l) => (
             <NavLink
               key={l.to}
               to={l.to}
@@ -173,17 +168,24 @@ export default function TopBar() {
             </div>
           ) : (
             <>
+              <button
+                onClick={() => setShowBookDemo(true)}
+                data-testid="topbar-book-demo-btn"
+                className="hidden md:inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-[color:var(--ink-2)] hover:text-[color:var(--brand-3)] transition border border-[color:var(--line)] hover:border-[color:var(--brand)] bg-[color:var(--bg-2)]"
+              >
+                <PhoneCall size={14} /> Book a Demo
+              </button>
               <Link
                 to="/login"
                 data-testid="topbar-login-btn"
-                className="rounded-full px-4 py-2 text-sm text-[color:var(--ink-2)] hover:text-[color:var(--ink)] transition flex items-center gap-2 border border-[color:var(--line)] hover:border-[color:var(--ink)] bg-[color:var(--bg-2)]"
+                className="rounded-full px-3 sm:px-4 py-2 text-sm text-[color:var(--ink-2)] hover:text-[color:var(--ink)] transition flex items-center gap-2 border border-[color:var(--line)] hover:border-[color:var(--ink)] bg-[color:var(--bg-2)]"
               >
-                <LogIn size={14} /> Login
+                <LogIn size={14} /> <span className="hidden sm:inline">Login</span>
               </Link>
               <Link
                 to="/register"
                 data-testid="topbar-register-btn"
-                className="hidden sm:inline-flex gs-btn-primary text-sm py-2 px-4"
+                className="!hidden md:!inline-flex gs-btn-primary text-sm py-2 px-4"
               >
                 Get Started
               </Link>
@@ -202,7 +204,7 @@ export default function TopBar() {
 
         {open && (
           <div className="md:hidden absolute top-[72px] left-0 right-0 bg-[color:var(--bg-2)] border-b border-[color:var(--line)] p-4 space-y-2">
-            {TOP_LINKS.map((l) => (
+            {!user && TOP_LINKS.map((l) => (
               <NavLink
                 key={l.to}
                 to={l.to}
@@ -213,11 +215,21 @@ export default function TopBar() {
                 {l.label}
               </NavLink>
             ))}
+            {!user && (
+              <button
+                onClick={() => { setOpen(false); setShowBookDemo(true); }}
+                data-testid="topbar-book-demo-btn-mobile"
+                className="sidebar-link w-full text-left"
+              >
+                <PhoneCall size={14} /> Book a Demo
+              </button>
+            )}
           </div>
         )}
       </header>
 
       <PasswordChangeModal open={showPwdModal} onClose={() => setShowPwdModal(false)} />
+      <BookDemoModal open={showBookDemo} onClose={() => setShowBookDemo(false)} />
     </>
   );
 }

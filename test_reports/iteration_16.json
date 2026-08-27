@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 16 frontend re-test of the 4 iteration-15 defects + 4 regressions (no backend suite re-run, per request). RESULTS: FIX 1 (BookDemoModal state reset) PASS — after X-close reopen the form is blank, and after a successful submit + 'Back to site' the reopen shows a fresh form (form=1, done=0, name=''). FIX 2 (mobile topbar @390px) FAIL (partial) — Book a Demo is correctly hidden and moved into the drawer, drawer shows 6 marketing links + Book a Demo, hamburger is clickable, BUT 'Get Started' ([data-testid=topbar-register-btn]) still renders at 390px (computed display:flex despite `hidden md:inline-flex`) and pushes the hamburger to x=385..419, so header scrollWidth 419 vs clientWidth 390 (29px horizontal overflow, hamburger visually clipped at the right edge). FIX 3 (Work Orders tiles) PASS — 4 tiles Created 35 / Assigned 34 / Dispatched 33 / Resolved 39 = 141; clicking Assigned filters headline to '34 work orders · assigned' with 34 rows. FIX 4 (solo-workspace walls) PASS — technician, performance_engineer and client_viewer were each pointed at 13 app routes (/assets,/work-orders,/operations,/dashboard,/overview,/admin,/reports,/performance,/client-portal,/ai,/team,/alerts,/my-work) and every non-landing route redirected to their landing; /site/S00001 still loads for all three; admin (super-role) can still open /my-work. REGRESSION 1 PASS — asset_manager sidebar has exactly the 7 expected items, zero WorkspaceSwitcher inside [data-testid=app-sidebar], and no profile switcher for a single-role user. REGRESSION 2 PASS — /assets, /ai, /work-orders all render their page testids for asset_manager. REGRESSION 3 PASS — logged-out desktop topbar: 6 topbar-link-*, Book a Demo, Login, Get Started visible; no sidebar. REGRESSION 4 PASS — with the tour active on /dashboard, elementFromPoint over [data-testid=sidebar-link-assets] returns the sidebar link (not the backdrop), a normal click navigates to /assets, and clicking a non-sidebar area still dismisses the tour (backdrop + step removed). No console errors observed in any flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TopBar (marketing, 390px)", "issue": "FIX 2 incomplete: [data-testid=topbar-register-btn] ('Get Started') has classes `hidden md:inline-flex gs-btn-primary` but computed display is `flex` at 390px, because `.gs-btn-primary { display: inline-flex }` in /app/frontend/src/index.css (line 126-138, plain CSS emitted after @tailwind utilities) overrides the single-class `.hidden` utility. Result: button renders at x=276..373, pushing [data-testid=topbar-menu-toggle] to 385..419 (right edge 419 > viewport 390) and header/document scrollWidth 419 vs clientWidth 390 — 29px horizontal overflow and the hamburger is visually clipped (still clickable). Fix options: render the button conditionally, use `max-md:!hidden`/`!hidden md:!inline-flex`, or move .gs-btn-* rules into `@layer components` so Tailwind utilities win.", "selector": "[data-testid=topbar-register-btn]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Marketing home @390px", "issues": ["Sticky header still overflows horizontally by 29px", "Hamburger menu icon clipped at the right edge (right=419 vs vw=390)"]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_16.json"],
+  "action_items": [
+    "Make 'Get Started' actually hidden below md in TopBar (Tailwind `hidden` loses to .gs-btn-primary's display:inline-flex) so the mobile header stops overflowing and the hamburger sits inside the 390px viewport.",
+    "Consider wrapping all .gs-btn-* rules in @layer components in index.css to prevent future Tailwind display-utility overrides."
+  ],
+  "critical_code_review_comments": [
+    "index.css defines .gs-btn-primary/.gs-btn-ghost as plain CSS after @tailwind utilities, so any Tailwind display utility (hidden/inline-flex/block) combined with these classes is silently ignored — a systemic cascade trap; move them into @layer components.",
+    "App.js Protected reads window.location.pathname instead of useLocation(); it works today because Protected re-renders per route change, but a location-derived value would be safer and testable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not re-tested (per request)", "frontend": "87% (7 of 8 checks pass; FIX 2 mobile header still overflows)"},
+  "seed_data_creation": "One contact record created via BookDemoModal submit: TEST_QA I16 / qa_i16_b@example.com (TEST_QA Co).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "/app/memory/test_credentials.md — ops, assetmgr, tech, perf, client, admin all logged in successfully",
+  "context_for_next_testing_agent": "Iteration 16: FIX 1/3/4 and all 4 regressions verified in the browser; only the 390px marketing header remains broken (Get Started not hidden due to .gs-btn-primary display override; header scrollWidth 419 vs 390). Tour no longer blocks sidebar clicks (z-[15]) so no need to skip it before nav, but skipping is still cheap. Solo-role redirect is enforced in App.js Protected via soloLanding map; /site/* is the only allowed extra route.",
+  "rca_of_the_issue": "Tailwind's `.hidden {display:none}` is generated at the @tailwind utilities directive (index.css line 3), while `.gs-btn-primary {display:inline-flex}` is authored later in the same file outside any @layer. Both selectors have identical specificity (0,1,0), so source order makes .gs-btn-primary win, keeping 'Get Started' displayed at 390px; its 97px width plus the rest of the right cluster pushes the 34px hamburger past the 390px viewport, producing the 29px header overflow reported in iteration 15."
+}

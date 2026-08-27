@@ -1,12 +1,16 @@
 import { NavLink, Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { NAV, visibleItems, ROLES } from "@/lib/roles";
-import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import { ROLES, visibleAppItems } from "@/lib/roles";
 
+/** App sidebar — visible ONLY to logged-in users. Renders the 8-item app nav
+ *  (or the single-page walled garden for technician / perf / client). */
 export default function Sidebar() {
   const { user } = useAuth();
-  const roleMeta = user ? ROLES[user.role] : null;
+  if (!user) return null;
+
+  const items = visibleAppItems(user);
+  const roleMeta = ROLES[user.role];
 
   return (
     <aside
@@ -14,7 +18,7 @@ export default function Sidebar() {
       className="hidden lg:flex fixed inset-y-0 left-0 w-[240px] flex-col border-r border-[color:var(--line)] bg-[color:var(--bg-2)] z-30"
     >
       <Link
-        to="/"
+        to={items[0]?.to || "/dashboard"}
         className="flex items-center gap-3 px-6 h-[72px] border-b border-[color:var(--line)]"
         data-testid="sidebar-logo"
       >
@@ -42,34 +46,23 @@ export default function Sidebar() {
         </div>
       )}
 
-      <WorkspaceSwitcher />
-
-      <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-6">
-        {NAV.map((section) => {
-          const items = visibleItems(section, user);
-          if (items.length === 0) return null;
-          return (
-            <div key={section.section}>
-              <div className="px-3 mb-2 font-mono text-[10px] tracking-[0.2em] text-[color:var(--ink-3)]">
-                {section.section}
-              </div>
-              <div className="space-y-1">
-                {items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === "/"}
-                    data-testid={`sidebar-link-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-                    className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
-                  >
-                    <item.icon size={16} strokeWidth={1.8} />
-                    <span>{item.label}</span>
-                  </NavLink>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto py-6 px-4">
+        <div className="px-3 mb-2 font-mono text-[10px] tracking-[0.2em] text-[color:var(--ink-3)]">
+          WORKSPACE
+        </div>
+        <div className="space-y-1">
+          {items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              data-testid={`sidebar-link-${item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+              className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
+            >
+              <item.icon size={16} strokeWidth={1.8} />
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </div>
       </nav>
 
       <div className="p-4 border-t border-[color:var(--line)]">

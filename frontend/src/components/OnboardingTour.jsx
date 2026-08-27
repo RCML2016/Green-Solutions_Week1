@@ -116,7 +116,7 @@ export default function OnboardingTour() {
   return (
     <>
       {/* Dim backdrop with a hole cut-out via CSS mask isn't cross-browser reliable; use two overlays around the target */}
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" onClick={finish} data-testid="tour-backdrop" />
+      <div className="fixed inset-0 z-[15] bg-black/40 backdrop-blur-[1px]" onClick={finish} data-testid="tour-backdrop" />
       {rect && (
         <div
           className="fixed z-50 rounded-2xl pointer-events-none"
