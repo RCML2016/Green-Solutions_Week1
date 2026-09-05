@@ -176,9 +176,12 @@ async def list_sites(
     search: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=500),
     skip: int = Query(default=0, ge=0),
+    include_retired: bool = False,
     user: dict = Depends(get_current_user),
 ):
     q: Dict[str, Any] = {}
+    if not include_retired:
+        q["lifecycle_status"] = {"$ne": "retired"}
     if category:
         q["site_type"] = category
     if state:

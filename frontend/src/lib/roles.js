@@ -11,7 +11,7 @@
 import {
   Home, LayoutDashboard, Bell, Wrench, ClipboardList, Users, MessageSquare,
   Layers, Cpu, Workflow, Mail, UserPlus, ShieldCheck, Briefcase, Activity,
-  LineChart, Eye, Info, PhoneCall, Sparkles, Package,
+  LineChart, Eye, Info, PhoneCall, Sparkles, Package, Settings,
 } from "lucide-react";
 
 export const ROLES = {
@@ -56,6 +56,7 @@ export const APP_NAV = [
   { to: "/overview",     label: "Overview",         icon: Briefcase,       allow: ["executive", "asset_manager", "om_manager"] },
   { to: "/dashboard",    label: "Portfolio",        icon: LayoutDashboard, allow: ["executive", "asset_manager", "om_manager", "performance_engineer"] },
   { to: "/assets",       label: "Assets",           icon: Package,         allow: ["asset_manager", "om_manager", "performance_engineer"] },
+  { to: "/fleet-admin",  label: "Fleet Admin",      icon: Settings,        allow: ["asset_manager"] },
   { to: "/ai",           label: "AI Intelligence",  icon: Sparkles,        allow: ["executive", "asset_manager", "om_manager", "performance_engineer", "technician"] },
   { to: "/operations",   label: "Operations",       icon: Activity,        allow: ["om_manager", "asset_manager"] },
   { to: "/work-orders",  label: "Work Orders",      icon: Wrench,          allow: ["om_manager", "technician", "asset_manager"] },

@@ -31,6 +31,7 @@ import ClientPortal from "@/pages/ClientPortal";
 import Assets from "@/pages/Assets";
 import AiIntelligence from "@/pages/AiIntelligence";
 import WorkOrders from "@/pages/WorkOrders";
+import FleetAdmin from "@/pages/FleetAdmin";
 import { landingFor } from "@/lib/roles";
 
 function Protected({ children, allow }) {
@@ -94,6 +95,9 @@ function App() {
             } />
             <Route path="/admin" element={
               <Protected allow={["admin"]}><Administration /></Protected>
+            } />
+            <Route path="/fleet-admin" element={
+              <Protected allow={["admin", "asset_manager"]}><FleetAdmin /></Protected>
             } />
             <Route path="/qa-tracker" element={
               <Protected allow={["admin"]}><QaTracker /></Protected>
