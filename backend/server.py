@@ -28,6 +28,11 @@ from routers.core import router as core_router
 from routers.fleet import router as fleet_router
 from routers.rbac_ext import router as rbac_router, team_router, client_router, evidence_router
 from routers.qa import router as qa_router
+<<<<<<< HEAD
+from routers.fleet_admin import router as fleet_admin_router
+=======
+from workspace import router as workspace_router
+>>>>>>> origin/feature/demo-hardening
 
 
 logging.basicConfig(
@@ -112,6 +117,11 @@ api_router.include_router(team_router)
 api_router.include_router(client_router)
 api_router.include_router(evidence_router)
 api_router.include_router(qa_router)
+<<<<<<< HEAD
+api_router.include_router(fleet_admin_router)
+=======
+api_router.include_router(workspace_router)
+>>>>>>> origin/feature/demo-hardening
 
 app.include_router(api_router)
 
@@ -141,6 +151,14 @@ async def startup():
     await db.branding.create_index("user_id", unique=True)
     await db.actions.create_index([("user_id", 1), ("created_at", -1)])
     await db.login_attempts.create_index("identifier")
+<<<<<<< HEAD
+    await db.fleet_sites.create_index("site_id", unique=True)
+    await db.fleet_assets.create_index("asset_id", unique=True)
+    await db.fleet_audit_log.create_index("timestamp")
+=======
+    await db.workspace_config.create_index("id", unique=True)
+    await db.workspace_audit.create_index("at")
+>>>>>>> origin/feature/demo-hardening
 
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@assetnova.com").lower()

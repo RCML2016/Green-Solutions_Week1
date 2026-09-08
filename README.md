@@ -51,6 +51,7 @@ INTEGRATION_PROXY_URL=https://integrations.emergentagent.com   # optional
 FRONTEND_URL=http://localhost:3000
 ADMIN_EMAIL=admin@assetnova.com          # optional, default value
 ADMIN_PASSWORD=Admin@123                     # optional, default value
+WORKSPACE_MODE=demo                           # demo | pilot | production
 ```
 
 > **Where do I get an `EMERGENT_LLM_KEY`?** Sign in to the Emergent platform and
@@ -84,6 +85,9 @@ so the Client Portal renders straight away.
 ---
 
 ## Feature Map (What's In Here)
+
+- **Workspace lifecycle** — one codebase for Demo, Initial Pilot and Live; admin-controlled feature flags, scenario selection, visible data-mode banner and deterministic demo reset
+- **Demo safety** — external notifications, evidence storage and integrations are server-blocked until Production mode explicitly enables external integrations
 
 - **Marketing site** — Landing, Platform, Solutions, How It Works, About, Contact
 - **Auth** — register (role picker), login, JWT, forgot/reset password, brute-force lockout

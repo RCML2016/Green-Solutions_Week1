@@ -26,6 +26,7 @@ from models import (
 )
 from rbac import MVP_ROLES
 import storage
+from workspace import require_external_side_effects
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])
 
@@ -227,6 +228,7 @@ async def upload_evidence(
     work_order_id: str = Form(None),
     note: str = Form(""),
     user: dict = Depends(get_current_user),
+    _workspace: dict = Depends(require_external_side_effects),
 ):
     """Upload a photo attached to an alarm / work-order. Returns the DB record."""
     ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "bin"

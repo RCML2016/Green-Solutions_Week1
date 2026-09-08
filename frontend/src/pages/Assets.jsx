@@ -3,10 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Package, Search, Filter, Loader2, ArrowRight, ChevronDown } from "lucide-react";
 
-/** Assets browser — all 5,473 assets with type filter + search + drill-in.
- *  Loads all sites once, then fetches each site's assets lazily via the
- *  /fleet/sites/{id} endpoint. To stay fast, we page through sites and
- *  concat their `assets[]` on the client, capped at 1500 for browse. */
+/** Assets browser backed by the paginated asset API (no N+1 site requests). */
 export default function Assets() {
   const [assets, setAssets] = useState([]);
   const [total, setTotal] = useState(0);
@@ -19,21 +16,10 @@ export default function Assets() {
     (async () => {
       setLoading(true);
       try {
-        // Fetch first 50 sites, then their assets in parallel
-        const sitesResp = await api.get("/fleet/sites", { params: { limit: 50 } });
-        setTotal(sitesResp.data.total);
-        const details = await Promise.all(
-          sitesResp.data.items.map((s) => api.get(`/fleet/sites/${s.site_id}`).catch(() => null))
-        );
+        const response = await api.get("/fleet-admin/assets", { params: { limit: 500 } });
         if (!mounted) return;
-        const flat = [];
-        for (const d of details) {
-          if (!d?.data?.assets) continue;
-          const siteName = d.data.site.site_name;
-          const siteType = d.data.site.site_type;
-          for (const a of d.data.assets) flat.push({ ...a, site_name: siteName, site_type: siteType });
-        }
-        setAssets(flat);
+        setTotal(response.data.total);
+        setAssets(response.data.items);
       } catch (e) {
         console.warn("Assets load failed:", e?.message);
       } finally {

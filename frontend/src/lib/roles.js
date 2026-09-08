@@ -11,7 +11,7 @@
 import {
   Home, LayoutDashboard, Bell, Wrench, ClipboardList, Users, MessageSquare,
   Layers, Cpu, Workflow, Mail, UserPlus, ShieldCheck, Briefcase, Activity,
-  LineChart, Eye, Info, PhoneCall, Sparkles, Package,
+  LineChart, Eye, Info, PhoneCall, Sparkles, Package, Settings,
 } from "lucide-react";
 
 export const ROLES = {
@@ -56,6 +56,7 @@ export const APP_NAV = [
   { to: "/overview",     label: "Overview",         icon: Briefcase,       allow: ["executive", "asset_manager", "om_manager"] },
   { to: "/dashboard",    label: "Portfolio",        icon: LayoutDashboard, allow: ["executive", "asset_manager", "om_manager", "performance_engineer"] },
   { to: "/assets",       label: "Assets",           icon: Package,         allow: ["asset_manager", "om_manager", "performance_engineer"] },
+  { to: "/fleet-admin",  label: "Fleet Admin",      icon: Settings,        allow: ["asset_manager"] },
   { to: "/ai",           label: "AI Intelligence",  icon: Sparkles,        allow: ["executive", "asset_manager", "om_manager", "performance_engineer", "technician"] },
   { to: "/operations",   label: "Operations",       icon: Activity,        allow: ["om_manager", "asset_manager"] },
   { to: "/work-orders",  label: "Work Orders",      icon: Wrench,          allow: ["om_manager", "technician", "asset_manager"] },
@@ -74,11 +75,15 @@ const SOLO_NAV = {
 };
 
 /** Returns the app nav items visible to the current user, role-filtered. */
-export function visibleAppItems(user) {
+const ROUTE_FEATURE = { "/overview": "overview", "/dashboard": "portfolio", "/assets": "assets", "/ai": "ai", "/operations": "operations", "/work-orders": "work_orders", "/reports": "reports", "/admin": "administration", "/my-work": "my_work", "/performance": "performance", "/client-portal": "client_portal" };
+
+export function visibleAppItems(user, features = {}) {
   if (!user) return [];
   if (user.role === "admin") return APP_NAV;                     // super-role sees all 8
-  if (SOLO_NAV[user.role]) return SOLO_NAV[user.role];           // walled garden
-  return APP_NAV.filter((it) => it.allow?.includes(user.role));
+  if (SOLO_NAV[user.role]) {
+    return SOLO_NAV[user.role].filter((item) => features[ROUTE_FEATURE[item.to]] !== false);
+  }
+  return APP_NAV.filter((it) => it.allow?.includes(user.role) && features[ROUTE_FEATURE[it.to]] !== false);
 }
 
 export function landingFor(role) {
