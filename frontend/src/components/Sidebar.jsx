@@ -3,14 +3,16 @@ import { ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLES, visibleAppItems } from "@/lib/roles";
 import { BrandMark } from "./BrandMark";
+import { useWorkspace } from "@/context/WorkspaceContext";
 
 /** App sidebar — visible ONLY to logged-in users. Renders the 8-item app nav
  *  (or the single-page walled garden for technician / perf / client). */
 export default function Sidebar() {
   const { user } = useAuth();
+  const { workspace } = useWorkspace();
   if (!user) return null;
 
-  const items = visibleAppItems(user);
+  const items = visibleAppItems(user, workspace?.features);
   const roleMeta = ROLES[user.role];
 
   return (
@@ -75,7 +77,7 @@ export default function Sidebar() {
         </a>
         <div className="mt-4 flex items-center gap-2 text-[11px] font-mono text-[color:var(--ink-3)]">
           <span className="pulse-dot" />
-          <span>LIVE · INTELLIGENCE ONLINE</span>
+          <span>{workspace?.mode === "production" ? "LIVE" : workspace?.mode?.toUpperCase() || "READY"} · INTELLIGENCE ONLINE</span>
         </div>
       </div>
     </aside>

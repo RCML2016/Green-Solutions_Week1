@@ -35,6 +35,13 @@ async def _notify_lead(name: str, email: str, message: str) -> None:
     Silent no-op if NOTIFICATION_EMAIL is unset — DB write is still the source
     of truth. FormSubmit requires a one-time verification click on first use.
     """
+    # Marketing submissions are always stored, but Demo/Pilot must never send
+    # mail outside AssetNova. Live mode explicitly enables this path.
+    from workspace import get_workspace_config
+    workspace = await get_workspace_config()
+    if not workspace["external_side_effects_enabled"]:
+        log.info("Lead notification suppressed in %s mode", workspace["mode"])
+        return
     to = os.environ.get("NOTIFICATION_EMAIL")
     if not to:
         return
