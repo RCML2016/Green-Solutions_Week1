@@ -1,6 +1,7 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { WorkspaceProvider, useWorkspace } from "@/context/WorkspaceContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { Toaster } from "sonner";
 
@@ -64,10 +65,18 @@ function Protected({ children, allow }) {
   return children;
 }
 
+function FeatureProtected({ feature, children }) {
+  const { user } = useAuth();
+  const { featureEnabled } = useWorkspace();
+  if (user?.role !== "admin" && !featureEnabled(feature)) return <Navigate to={landingFor(user?.role)} replace />;
+  return children;
+}
+
 function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <WorkspaceProvider>
         <BrowserRouter>
           <Toaster position="top-right" richColors />
         <Routes>
@@ -81,16 +90,16 @@ function App() {
 
             {/* Role-specific landings */}
             <Route path="/overview" element={
-              <Protected allow={["executive", "asset_manager", "om_manager"]}><ExecutiveOverview /></Protected>
+              <Protected allow={["executive", "asset_manager", "om_manager"]}><FeatureProtected feature="overview"><ExecutiveOverview /></FeatureProtected></Protected>
             } />
             <Route path="/dashboard" element={
-              <Protected allow={["executive", "asset_manager", "om_manager", "performance_engineer"]}><Dashboard /></Protected>
+              <Protected allow={["executive", "asset_manager", "om_manager", "performance_engineer"]}><FeatureProtected feature="portfolio"><Dashboard /></FeatureProtected></Protected>
             } />
             <Route path="/operations" element={
-              <Protected allow={["om_manager", "asset_manager"]}><OperationsCenter /></Protected>
+              <Protected allow={["om_manager", "asset_manager"]}><FeatureProtected feature="operations"><OperationsCenter /></FeatureProtected></Protected>
             } />
             <Route path="/my-work" element={
-              <Protected allow={["technician", "om_manager"]}><MyWork /></Protected>
+              <Protected allow={["technician", "om_manager"]}><FeatureProtected feature="my_work"><MyWork /></FeatureProtected></Protected>
             } />
             <Route path="/admin" element={
               <Protected allow={["admin"]}><Administration /></Protected>
@@ -99,23 +108,23 @@ function App() {
               <Protected allow={["admin"]}><QaTracker /></Protected>
             } />
             <Route path="/performance" element={
-              <Protected allow={["performance_engineer", "asset_manager"]}><PerformanceAnalytics /></Protected>
+              <Protected allow={["performance_engineer", "asset_manager"]}><FeatureProtected feature="performance"><PerformanceAnalytics /></FeatureProtected></Protected>
             } />
             <Route path="/client-portal" element={
-              <Protected allow={["client_viewer"]}><ClientPortal /></Protected>
+              <Protected allow={["client_viewer"]}><FeatureProtected feature="client_portal"><ClientPortal /></FeatureProtected></Protected>
             } />
             <Route path="/assets" element={
-              <Protected allow={["asset_manager", "om_manager", "performance_engineer"]}><Assets /></Protected>
+              <Protected allow={["asset_manager", "om_manager", "performance_engineer"]}><FeatureProtected feature="assets"><Assets /></FeatureProtected></Protected>
             } />
             <Route path="/ai" element={
-              <Protected allow={["executive", "asset_manager", "om_manager", "performance_engineer", "technician"]}><AiIntelligence /></Protected>
+              <Protected allow={["executive", "asset_manager", "om_manager", "performance_engineer", "technician"]}><FeatureProtected feature="ai"><AiIntelligence /></FeatureProtected></Protected>
             } />
             <Route path="/work-orders" element={
-              <Protected allow={["om_manager", "technician", "asset_manager"]}><WorkOrders /></Protected>
+              <Protected allow={["om_manager", "technician", "asset_manager"]}><FeatureProtected feature="work_orders"><WorkOrders /></FeatureProtected></Protected>
             } />
 
             <Route path="/reports" element={
-              <Protected allow={["executive", "asset_manager", "om_manager"]}><Reports /></Protected>
+              <Protected allow={["executive", "asset_manager", "om_manager"]}><FeatureProtected feature="reports"><Reports /></FeatureProtected></Protected>
             } />
             <Route path="/team" element={
               <Protected allow={["admin"]}><Team /></Protected>
@@ -134,7 +143,8 @@ function App() {
           <Route path="/s/:token" element={<Snapshot />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
+        </BrowserRouter>
+        </WorkspaceProvider>
       </AuthProvider>
     </ThemeProvider>
   );

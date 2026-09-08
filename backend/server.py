@@ -28,6 +28,7 @@ from routers.core import router as core_router
 from routers.fleet import router as fleet_router
 from routers.rbac_ext import router as rbac_router, team_router, client_router, evidence_router
 from routers.qa import router as qa_router
+from workspace import router as workspace_router
 
 
 logging.basicConfig(
@@ -112,6 +113,7 @@ api_router.include_router(team_router)
 api_router.include_router(client_router)
 api_router.include_router(evidence_router)
 api_router.include_router(qa_router)
+api_router.include_router(workspace_router)
 
 app.include_router(api_router)
 
@@ -141,6 +143,8 @@ async def startup():
     await db.branding.create_index("user_id", unique=True)
     await db.actions.create_index([("user_id", 1), ("created_at", -1)])
     await db.login_attempts.create_index("identifier")
+    await db.workspace_config.create_index("id", unique=True)
+    await db.workspace_audit.create_index("at")
 
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@assetnova.com").lower()

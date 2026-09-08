@@ -74,11 +74,15 @@ const SOLO_NAV = {
 };
 
 /** Returns the app nav items visible to the current user, role-filtered. */
-export function visibleAppItems(user) {
+const ROUTE_FEATURE = { "/overview": "overview", "/dashboard": "portfolio", "/assets": "assets", "/ai": "ai", "/operations": "operations", "/work-orders": "work_orders", "/reports": "reports", "/admin": "administration", "/my-work": "my_work", "/performance": "performance", "/client-portal": "client_portal" };
+
+export function visibleAppItems(user, features = {}) {
   if (!user) return [];
   if (user.role === "admin") return APP_NAV;                     // super-role sees all 8
-  if (SOLO_NAV[user.role]) return SOLO_NAV[user.role];           // walled garden
-  return APP_NAV.filter((it) => it.allow?.includes(user.role));
+  if (SOLO_NAV[user.role]) {
+    return SOLO_NAV[user.role].filter((item) => features[ROUTE_FEATURE[item.to]] !== false);
+  }
+  return APP_NAV.filter((it) => it.allow?.includes(user.role) && features[ROUTE_FEATURE[it.to]] !== false);
 }
 
 export function landingFor(role) {

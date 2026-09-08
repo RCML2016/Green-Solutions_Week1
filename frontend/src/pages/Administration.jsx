@@ -7,6 +7,7 @@ import {
   ShieldCheck, Users as UsersIcon, Loader2, ArrowRight, Database, Bell, Sparkles, Inbox, Mail, Download,
 } from "lucide-react";
 import { ROLES } from "@/lib/roles";
+import WorkspaceControl from "@/components/WorkspaceControl";
 
 const ROLE_ORDER = ["admin", "asset_manager", "om_manager", "technician", "executive", "performance_engineer", "client_viewer"];
 const ALL_MVP_ROLES = ["executive", "asset_manager", "om_manager", "technician", "performance_engineer", "client_viewer", "admin"];
@@ -157,6 +158,8 @@ export default function Administration() {
           <div className="text-[11px] text-[color:var(--ink-3)] mt-1">via Emergent Universal Key</div>
         </div>
       </div>
+
+      <WorkspaceControl />
 
       {/* Leads Inbox — always-on, DB-backed, works whether external email push succeeded or not */}
       <div className="gs-card p-6 mt-8" data-testid="admin-leads-inbox">

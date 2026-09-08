@@ -1,5 +1,5 @@
 """Pydantic request/response models — shared."""
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -115,3 +115,10 @@ class ActionCreate(BaseModel):
     finding_code: str = Field(min_length=1, max_length=40)
     finding_title: str = Field(min_length=1, max_length=200)
     action_text: str = Field(min_length=1, max_length=500)
+
+
+class WorkspaceConfigUpdate(BaseModel):
+    """Admin-controlled operating mode and feature switches."""
+    mode: str = Field(pattern="^(demo|pilot|production)$")
+    scenario: str = Field(pattern="^(portfolio_overview|inverter_fault|soiling_loss|bess_risk)$")
+    features: Dict[str, bool] = Field(default_factory=dict)
