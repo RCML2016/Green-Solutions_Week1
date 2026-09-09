@@ -13,6 +13,7 @@ import AlarmsFeed from "@/components/dashboard/AlarmsFeed";
 import WorkOrdersCard from "@/components/dashboard/WorkOrdersCard";
 import AiInsightPanel from "@/components/dashboard/AiInsightPanel";
 import OnboardingTour from "@/components/OnboardingTour";
+import WeatherAlertBanner from "@/components/weather/WeatherAlertBanner";
 
 const REFRESH_MS = 5000;
 
@@ -204,6 +205,8 @@ export default function Dashboard() {
           <CategorySwitcher categories={categories} active={category} onChange={setCategory} />
         </div>
       )}
+
+      <WeatherAlertBanner />
 
       {!kpis ? (
         <div className="text-[color:var(--ink-3)] text-sm flex items-center gap-2">

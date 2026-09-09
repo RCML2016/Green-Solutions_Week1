@@ -130,7 +130,11 @@ export default function WorkOrders() {
                       <td className="py-2 px-2 text-xs text-[color:var(--ink-2)]">{wo.trade}</td>
                       <td className="py-2 px-2 text-xs text-[color:var(--ink)] max-w-md truncate">{wo.resolution_action}</td>
                       <td className="py-2 px-2 text-right font-mono text-xs text-[color:var(--ink-2)]">{wo.labor_hours}h</td>
-                      <td className="py-2 px-2 text-right font-mono text-xs text-[color:var(--ink-2)]">${wo.parts_cost_usd}</td>
+                      <td className="py-2 px-2 text-right font-mono text-xs text-[color:var(--ink-2)]">
+                        {wo.parts_cost_usd != null ? `$${wo.parts_cost_usd}` : (
+                          <span className="text-[color:var(--ink-3)]" data-testid={`wo-cost-restricted-${wo.work_order_id}`}>Restricted</span>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-right">
                         <span
                           className="text-[10px] font-mono px-2 py-0.5 rounded-full"

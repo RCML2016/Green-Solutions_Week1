@@ -9,6 +9,7 @@ render (live / cached / stale / unavailable).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -23,6 +24,13 @@ log = logging.getLogger("assetnova")
 WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY")
 WEATHER_BASE_URL = os.environ.get("WEATHER_BASE_URL", "https://api.weatherapi.com/v1")
 CACHE_TTL_MINUTES = 20  # within the requested 15-30 min refresh window
+
+# "Severe weather" thresholds for the Weather Risk filter + high-priority alerts
+STORM_WIND_KPH = 40
+STORM_RAIN_CHANCE_PCT = 70
+HEAT_MAX_TEMP_C = 38
+RISK_INDEX_TTL_MINUTES = 20
+_risk_index_cache: Dict[str, Dict[str, Any]] = {}
 
 
 def resolve_location_query(site: Optional[dict], asset: Optional[dict] = None) -> Optional[str]:
@@ -181,3 +189,45 @@ async def get_weather(query: Optional[str]) -> dict:
         upsert=True,
     )
     return {**payload, "data_status": "live", "last_updated": fetched_at}
+
+
+def _classify_forecast_risk(forecast: List[dict]) -> Dict[str, Any]:
+    """Flags any day in the (up to 7-day) forecast that crosses the storm/heat
+    severity thresholds. Used by the Weather Risk filter + high-priority alerts."""
+    storm_days = [
+        d["date"] for d in forecast
+        if (d.get("maxwind_kph") or 0) > STORM_WIND_KPH or (d.get("daily_chance_of_rain") or 0) > STORM_RAIN_CHANCE_PCT
+    ]
+    heat_days = [d["date"] for d in forecast if (d.get("maxtemp_c") or 0) > HEAT_MAX_TEMP_C]
+    return {"storm_risk": bool(storm_days), "heat_risk": bool(heat_days), "storm_days": storm_days, "heat_days": heat_days}
+
+
+async def get_weather_risk_index(sites: List[dict]) -> Dict[str, Any]:
+    """Storm/heat risk flags per site, across the full 7-day forecast — cached
+    per distinct site-set (e.g. demo subset vs full portfolio) for 20min so
+    repeated table renders / filter changes don't re-hit WeatherAPI."""
+    site_ids = sorted(s["site_id"] for s in sites if s.get("site_id"))
+    if not site_ids:
+        return {"computed_at": datetime.now(timezone.utc).isoformat(), "sites": {}}
+
+    cache_key = str(hash(tuple(site_ids)))
+    now = datetime.now(timezone.utc)
+    entry = _risk_index_cache.get(cache_key)
+    if entry and (now - entry["computed_at"]) < timedelta(minutes=RISK_INDEX_TTL_MINUTES):
+        return entry["data"]
+
+    sem = asyncio.Semaphore(10)
+
+    async def _one(site: dict):
+        query = resolve_location_query(site)
+        async with sem:
+            payload = await get_weather(query)
+        risk = _classify_forecast_risk(payload.get("forecast") or []) if payload.get("available") else {
+            "storm_risk": False, "heat_risk": False, "storm_days": [], "heat_days": [],
+        }
+        return site["site_id"], risk
+
+    results = await asyncio.gather(*[_one(s) for s in sites])
+    data = {"computed_at": now.isoformat(), "sites": {sid: r for sid, r in results}}
+    _risk_index_cache[cache_key] = {"computed_at": now, "data": data}
+    return data

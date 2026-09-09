@@ -124,7 +124,9 @@ export default function SiteDetail() {
             REVENUE LOSS <AlertTriangle size={12} className="text-[color:var(--brand-3)]" />
           </div>
           <div className="font-display text-3xl mt-2 text-[color:var(--ink)]">
-            ${latest_performance?.estimated_revenue_loss_usd?.toFixed(2) ?? "—"}
+            {latest_performance && latest_performance.estimated_revenue_loss_usd == null && "estimated_revenue_loss_usd" in latest_performance
+              ? <span className="text-lg" data-testid="site-revenue-restricted">Restricted</span>
+              : `$${latest_performance?.estimated_revenue_loss_usd?.toFixed(2) ?? "—"}`}
           </div>
           <div className="text-[11px] text-[color:var(--ink-3)] mt-1">
             {latest_performance?.lost_kWh?.toFixed(1) ?? "—"} kWh lost today
@@ -276,7 +278,7 @@ export default function SiteDetail() {
                   </div>
                   <div className="text-xs text-[color:var(--ink)] mt-1">{wo.resolution_action}</div>
                   <div className="text-[10px] text-[color:var(--ink-3)] mt-0.5">
-                    {wo.trade} · {wo.labor_hours}h · ${wo.parts_cost_usd}
+                    {wo.trade} · {wo.labor_hours}h · {wo.parts_cost_usd != null ? `$${wo.parts_cost_usd}` : "Restricted"}
                   </div>
                 </div>
               ))}

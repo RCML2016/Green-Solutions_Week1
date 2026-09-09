@@ -43,6 +43,26 @@ PRIORITY_SUMMARY = [
 
 CATEGORY_ORDER = [c["category"] for c in PRIORITY_SUMMARY]
 
+# Roles that never see $ figures (revenue at risk / loss, parts cost) — field techs
+# work on assets/alarms, not portfolio financials.
+FINANCIAL_MASK_ROLES = {"technician"}
+
+
+def _is_masked(user: dict) -> bool:
+    return (user or {}).get("role") in FINANCIAL_MASK_ROLES
+
+
+def _risk_label(risk: Optional[dict]) -> Optional[str]:
+    if not risk:
+        return None
+    if risk.get("storm_risk") and risk.get("heat_risk"):
+        return "Storm & Heat Risk"
+    if risk.get("storm_risk"):
+        return "Storm Risk"
+    if risk.get("heat_risk"):
+        return "Heat Risk"
+    return "Clear"
+
 
 @router.get("/categories")
 async def list_categories(user: dict = Depends(get_current_user)):
@@ -193,7 +213,7 @@ async def fleet_kpis(
         "avg_availability_pct": round(perf.get("avg_availability") or 0, 2),
         "avg_degradation_pct": round(perf.get("avg_degradation") or 0, 2),
         "total_lost_kWh": round(perf.get("total_lost_kWh") or 0, 1),
-        "total_revenue_loss_usd": round(perf.get("total_revenue_loss") or 0, 2),
+        "total_revenue_loss_usd": None if _is_masked(user) else round(perf.get("total_revenue_loss") or 0, 2),
         "expected_kWh_day": round(perf.get("total_expected_kWh") or 0, 1),
         "actual_kWh_day": round(perf.get("total_actual_kWh") or 0, 1),
         "alarms_total": total_alarms,
@@ -212,6 +232,8 @@ async def list_sites(
     city: Optional[str] = None,
     zip_code: Optional[str] = None,
     search: Optional[str] = None,
+    weather_risk: Optional[str] = Query(default=None, pattern="^(storm|heat|clear)$"),
+    show_weather_risk: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=500),
     skip: int = Query(default=0, ge=0),
     include_retired: bool = False,
@@ -239,6 +261,33 @@ async def list_sites(
         demo_ids = await demo_scope.get_demo_site_id_set(category)
         q["site_id"] = {"$in": sorted(demo_ids)}
 
+    # Weather Risk — computed once over the full demo/portfolio scope (not
+    # category-filtered) so the underlying WeatherAPI calls stay cached &
+    # shared across category switches. Only run when actually requested, so
+    # unrelated callers of this endpoint (e.g. Fleet Admin) aren't slowed down.
+    risk_by_site: Dict[str, Any] = {}
+    if weather_risk or show_weather_risk:
+        risk_scope_match: Dict[str, Any] = {"lifecycle_status": {"$ne": "retired"}}
+        if demo_active:
+            risk_scope_match["site_id"] = {"$in": sorted(await demo_scope.get_demo_site_id_set())}
+        risk_scope_sites = await db.fleet_sites.find(
+            risk_scope_match, {"_id": 0, "site_id": 1, "zip_code": 1, "latitude": 1, "longitude": 1}
+        ).to_list(1000)
+        risk_index = await weather_mod.get_weather_risk_index(risk_scope_sites)
+        risk_by_site = risk_index["sites"]
+
+        if weather_risk:
+            if weather_risk == "storm":
+                matched = {sid for sid, r in risk_by_site.items() if r["storm_risk"]}
+            elif weather_risk == "heat":
+                matched = {sid for sid, r in risk_by_site.items() if r["heat_risk"]}
+            else:
+                matched = {sid for sid, r in risk_by_site.items() if not r["storm_risk"] and not r["heat_risk"]}
+            existing_ids = q.get("site_id", {}).get("$in") if isinstance(q.get("site_id"), dict) else None
+            if existing_ids is not None:
+                matched &= set(existing_ids)
+            q["site_id"] = {"$in": sorted(matched)}
+
     total = await db.fleet_sites.count_documents(q)
     cursor = db.fleet_sites.find(q, {"_id": 0}).sort("site_id", 1).skip(skip).limit(limit)
     sites = await cursor.to_list(limit)
@@ -264,6 +313,7 @@ async def list_sites(
     async for a in db.fleet_alarms.aggregate(alarm_pipeline):
         alarms_by_site[a["_id"]] = a
 
+    masked = _is_masked(user)
     enriched = []
     for s in sites:
         p = perf_by_site.get(s["site_id"], {})
@@ -272,10 +322,11 @@ async def list_sites(
             **s,
             "latest_performance_ratio_pct": p.get("performance_ratio_pct"),
             "latest_availability_pct": p.get("availability_pct"),
-            "latest_revenue_loss_usd": p.get("estimated_revenue_loss_usd"),
+            "latest_revenue_loss_usd": None if masked else p.get("estimated_revenue_loss_usd"),
             "open_alarms": a.get("open_alarms", 0),
             "high_sev_alarms": a.get("high_sev", 0),
             "location_label": weather_mod.location_label(s),
+            "weather_risk": _risk_label(risk_by_site.get(s["site_id"])) if (weather_risk or show_weather_risk) else None,
         })
     return {"total": total, "items": enriched}
 
@@ -329,6 +380,11 @@ async def site_detail(site_id: str, user: dict = Depends(get_current_user)):
     for a in assets:
         t = a.get("asset_type", "Other")
         breakdown[t] = breakdown.get(t, 0) + 1
+
+    if _is_masked(user):
+        if latest_perf:
+            latest_perf = {**latest_perf, "estimated_revenue_loss_usd": None}
+        wos = [{**w, "parts_cost_usd": None} for w in wos]
 
     return {
         "site": site,
@@ -394,6 +450,42 @@ async def weather_batch(site_ids: str, _user: dict = Depends(get_current_user)):
             "data_status": payload.get("data_status"),
         }
     return out
+
+
+@router.get("/weather/alerts")
+async def weather_alerts(user: dict = Depends(get_current_user)):
+    """High-priority sites (priority='High') with severe weather forecast in
+    the next 48h — powers the in-app Weather Alert banner on Dashboard."""
+    demo_active = await demo_scope.is_demo_scope_active(user)
+    match: Dict[str, Any] = {"lifecycle_status": {"$ne": "retired"}, "priority": "High"}
+    if demo_active:
+        match["site_id"] = {"$in": sorted(await demo_scope.get_demo_site_id_set())}
+    sites = await db.fleet_sites.find(
+        match, {"_id": 0, "site_id": 1, "site_name": 1, "zip_code": 1, "latitude": 1, "longitude": 1}
+    ).to_list(500)
+    if not sites:
+        return {"alerts": []}
+
+    index = await weather_mod.get_weather_risk_index(sites)
+    now = datetime.now(timezone.utc)
+    window_dates = {(now + timedelta(days=d)).strftime("%Y-%m-%d") for d in range(0, 3)}
+    site_meta = {s["site_id"]: s for s in sites}
+
+    alerts = []
+    for site_id, risk in index["sites"].items():
+        near_storm = sorted(d for d in risk["storm_days"] if d in window_dates)
+        near_heat = sorted(d for d in risk["heat_days"] if d in window_dates)
+        if not near_storm and not near_heat:
+            continue
+        label = "Storm & Heat Risk" if near_storm and near_heat else ("Storm Risk" if near_storm else "Heat Risk")
+        alerts.append({
+            "site_id": site_id,
+            "site_name": site_meta.get(site_id, {}).get("site_name"),
+            "risk_label": label,
+            "days": sorted(set(near_storm + near_heat)),
+        })
+    alerts.sort(key=lambda a: a["site_id"])
+    return {"alerts": alerts, "computed_at": index["computed_at"]}
 
 
 @router.get("/weather/correlation")
@@ -613,6 +705,9 @@ async def list_work_orders(
     ]
     status_breakdown = [{"status": d["_id"], "count": d["count"]} async for d in db.fleet_work_orders.aggregate(status_pipeline)]
 
+    if _is_masked(user):
+        items = [{**w, "parts_cost_usd": None} for w in items]
+
     return {"total": total, "items": items, "status_breakdown": status_breakdown}
 
 
@@ -628,7 +723,10 @@ async def performance_trend(
     rows = await db.fleet_performance.find(
         {"site_id": site_id}, {"_id": 0}
     ).sort("date", -1).limit(days).to_list(days)
-    return {"site_id": site_id, "rows": list(reversed(rows))}
+    rows = list(reversed(rows))
+    if _is_masked(user):
+        rows = [{**r, "estimated_revenue_loss_usd": None} for r in rows]
+    return {"site_id": site_id, "rows": rows}
 
 
 # --------- State breakdown (for map/charts) ---------

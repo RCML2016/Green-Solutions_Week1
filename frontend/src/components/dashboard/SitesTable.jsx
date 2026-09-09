@@ -1,8 +1,15 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { ChevronRight, Search, MapPin, AlertTriangle, Loader2 } from "lucide-react";
+import { ChevronRight, Search, MapPin, AlertTriangle, Loader2, CloudLightning, Sun, CloudCheck } from "lucide-react";
 import WeatherChip from "@/components/weather/WeatherChip";
+
+const RISK_STYLE = {
+  "Storm Risk": { color: "#b91c1c", bg: "#fee2e2", icon: CloudLightning },
+  "Heat Risk": { color: "#b45309", bg: "#fef3c7", icon: Sun },
+  "Storm & Heat Risk": { color: "#b91c1c", bg: "#fee2e2", icon: CloudLightning },
+  "Clear": { color: "#087346", bg: "#dff5e9", icon: CloudCheck },
+};
 
 /** Sites table backed by /api/fleet/sites — sortable, searchable, category-filtered */
 export default function SitesTable({ category }) {
@@ -10,15 +17,17 @@ export default function SitesTable({ category }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [weatherRisk, setWeatherRisk] = useState("");
   const [limit] = useState(20);
   const [weatherChips, setWeatherChips] = useState({});
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    const params = { limit };
+    const params = { limit, show_weather_risk: true };
     if (category) params.category = category;
     if (search.trim()) params.search = search.trim();
+    if (weatherRisk) params.weather_risk = weatherRisk;
     api.get("/fleet/sites", { params })
       .then(({ data }) => {
         if (!mounted) return;
@@ -34,7 +43,7 @@ export default function SitesTable({ category }) {
       .catch(() => mounted && setRows([]))
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
-  }, [category, search, limit]);
+  }, [category, search, weatherRisk, limit]);
 
   const badge = (pr) => {
     if (pr == null) return { color: "#687870", bg: "#edf2ef" };
@@ -52,17 +61,31 @@ export default function SitesTable({ category }) {
             {total.toLocaleString()} sites · showing top {Math.min(limit, rows.length)}
           </div>
         </div>
-        <div className="relative">
-          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-3)]" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search site id / name..."
-            data-testid="sites-search"
-            className="gs-input text-xs pl-8"
-            style={{ padding: "8px 12px 8px 30px", width: 240 }}
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={weatherRisk}
+            onChange={(e) => setWeatherRisk(e.target.value)}
+            data-testid="sites-weather-risk-filter"
+            className="gs-input text-xs"
+            style={{ padding: "8px 10px" }}
+          >
+            <option value="">All Weather</option>
+            <option value="storm">Storm Risk</option>
+            <option value="heat">Heat Risk</option>
+            <option value="clear">Clear this week</option>
+          </select>
+          <div className="relative">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--ink-3)]" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search site id / name..."
+              data-testid="sites-search"
+              className="gs-input text-xs pl-8"
+              style={{ padding: "8px 12px 8px 30px", width: 240 }}
+            />
+          </div>
         </div>
       </div>
 
@@ -82,6 +105,7 @@ export default function SitesTable({ category }) {
                 <th className="text-left py-2 px-2">SITE</th>
                 <th className="text-left py-2 px-2">STATE</th>
                 <th className="text-left py-2 px-2">WEATHER</th>
+                <th className="text-left py-2 px-2">RISK</th>
                 <th className="text-right py-2 px-2">CAPACITY (kW)</th>
                 <th className="text-right py-2 px-2">PR%</th>
                 <th className="text-right py-2 px-2">AVAIL%</th>
@@ -112,6 +136,24 @@ export default function SitesTable({ category }) {
                     <td className="py-2 px-2">
                       <WeatherChip chip={weatherChips[s.site_id]} />
                     </td>
+                    <td className="py-2 px-2">
+                      {s.weather_risk && s.weather_risk !== "Clear" ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full"
+                          style={{ color: RISK_STYLE[s.weather_risk]?.color, background: RISK_STYLE[s.weather_risk]?.bg }}
+                          data-testid={`site-risk-${s.site_id}`}
+                        >
+                          {(() => { const Icon = RISK_STYLE[s.weather_risk]?.icon; return Icon ? <Icon size={10} /> : null; })()}
+                          {s.weather_risk}
+                        </span>
+                      ) : s.weather_risk === "Clear" ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ color: RISK_STYLE.Clear.color, background: RISK_STYLE.Clear.bg }}>
+                          <CloudCheck size={10} /> Clear
+                        </span>
+                      ) : (
+                        <span className="text-xs font-mono text-[color:var(--ink-3)]">—</span>
+                      )}
+                    </td>
                     <td className="py-2 px-2 text-right font-mono text-xs text-[color:var(--ink)]">
                       {s.site_capacity_kW?.toFixed?.(1) ?? "—"}
                     </td>
@@ -137,7 +179,7 @@ export default function SitesTable({ category }) {
                       )}
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-xs text-[color:var(--ink-2)]">
-                      {s.latest_revenue_loss_usd ? `$${s.latest_revenue_loss_usd.toFixed(0)}` : "—"}
+                      {s.latest_revenue_loss_usd != null ? `$${s.latest_revenue_loss_usd.toFixed(0)}` : "—"}
                     </td>
                     <td className="py-2 px-2 text-right">
                       <Link to={`/site/${s.site_id}`} data-testid={`site-open-${s.site_id}`}>

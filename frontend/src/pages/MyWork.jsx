@@ -197,7 +197,7 @@ export default function MyWork() {
                     </div>
                     <div className="text-sm text-[color:var(--ink)] mt-1">{wo.resolution_action}</div>
                     <div className="text-[10px] font-mono text-[color:var(--ink-3)] mt-0.5">
-                      {wo.site_id} · {wo.trade} · {wo.labor_hours}h · ${wo.parts_cost_usd}
+                      {wo.site_id} · {wo.trade} · {wo.labor_hours}h · {wo.parts_cost_usd != null ? `$${wo.parts_cost_usd}` : "Restricted"}
                     </div>
                   </div>
                 </div>
