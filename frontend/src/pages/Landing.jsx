@@ -192,7 +192,7 @@ export default function Landing() {
         <div className="max-w-[1200px] mx-auto">
           <Reveal>
             <div className="text-center">
-              <div className="eyebrow inline-block">SEE · UNDERSTAND · ACT</div>
+              <div className="eyebrow inline-block">VISIBILITY · INTELLIGENCE · ACTION</div>
               <h2 className="font-display text-4xl md:text-5xl mt-4 text-[color:var(--ink)]">
                 Intelligence that moves <br /> with your operation.
               </h2>
@@ -203,9 +203,9 @@ export default function Landing() {
           </Reveal>
           <div className="grid md:grid-cols-3 gap-6 mt-14">
             {[
-              { n: "01", t: "See", i: Activity, d: "Gain a unified view of portfolio health, asset performance and emerging anomalies.", list: ["Portfolio visibility", "Asset-level intelligence", "Continuous monitoring"] },
-              { n: "02", t: "Understand", i: Sparkles, d: "AI identifies abnormal patterns and explains the evidence behind each finding.", list: ["AI diagnostics", "Explainable findings", "Confidence scoring"], accent: true },
-              { n: "03", t: "Act", i: ArrowRight, d: "Convert intelligence into prioritized operational actions and business reports.", list: ["Work-order recommendations", "Operations prioritization", "AI-generated reporting"] },
+              { n: "01", t: "Visibility", i: Activity, d: "Gain a unified view of portfolio health, asset performance and emerging anomalies.", list: ["Portfolio visibility", "Asset-level intelligence", "Continuous monitoring"] },
+              { n: "02", t: "Intelligence", i: Sparkles, d: "AI identifies abnormal patterns and explains the evidence behind each finding.", list: ["AI diagnostics", "Explainable findings", "Confidence scoring"], accent: true },
+              { n: "03", t: "Action", i: ArrowRight, d: "Convert intelligence into prioritized operational actions and business reports.", list: ["Work-order recommendations", "Operations prioritization", "AI-generated reporting"] },
             ].map((c, idx) => (
               <Reveal key={c.n} delay={idx * 120}>
                 <div className={`relative p-8 ${c.accent ? "gs-card-accent" : "gs-card"}`}>

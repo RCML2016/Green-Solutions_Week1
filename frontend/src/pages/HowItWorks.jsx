@@ -1,9 +1,9 @@
 import { Activity, Sparkles, ArrowRight, Check } from "lucide-react";
 
 const steps = [
-  { n: "01", t: "See", i: Activity, d: "Gain a unified view of portfolio health, asset performance and emerging anomalies." },
-  { n: "02", t: "Understand", i: Sparkles, d: "AI identifies abnormal patterns and explains the evidence behind each finding." },
-  { n: "03", t: "Act", i: ArrowRight, d: "Convert intelligence into prioritized operational actions and business reports.", accent: true },
+  { n: "01", t: "Visibility", i: Activity, d: "Gain a unified view of portfolio health, asset performance and emerging anomalies." },
+  { n: "02", t: "Intelligence", i: Sparkles, d: "AI identifies abnormal patterns and explains the evidence behind each finding." },
+  { n: "03", t: "Action", i: ArrowRight, d: "Convert intelligence into prioritized operational actions and business reports.", accent: true },
 ];
 
 export default function HowItWorks() {
