@@ -35,5 +35,8 @@ None currently outstanding.
 - Implement 4 remaining roles mentioned in backlog discussion (P1)
 - Replace Privacy Policy / Terms of Use placeholder boilerplate with real legal text once user provides it (P1)
 
+## Reference Docs
+- `/app/docs/PRODUCT_KNOWLEDGE_BASE.md` — Product Knowledge Base draft (2026-09-09): Solar/Wind/BESS/Hybrid-Microgrid/Cross-cutting module catalog with proposed AN-[ASSET]-[FUNCTION]-[NUMBER] SKU naming convention and US regulatory/standards references per asset class. Marked as a starter draft — real SKUs/pricing and regulatory citations need confirmation before customer-facing use.
+
 ## Credentials
 See `/app/memory/test_credentials.md`
