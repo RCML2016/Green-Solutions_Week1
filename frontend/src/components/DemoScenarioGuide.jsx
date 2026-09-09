@@ -14,7 +14,7 @@ export default function DemoScenarioGuide() {
   const steps = scenario?.steps?.filter((step) => user.role === "admin" || allowed.has(step.path)) || [];
   if (!steps.length) return null;
   return (
-    <nav className="px-6 lg:px-10 py-2 border-b border-[color:var(--line)] bg-[color:var(--bg-2)] flex items-center gap-2 overflow-x-auto" aria-label="Demo scenario" data-testid="demo-scenario-guide">
+    <nav className="relative z-40 px-6 lg:px-10 py-2 border-b border-[color:var(--line)] bg-[color:var(--bg-2)] flex items-center gap-2 overflow-x-auto" aria-label="Demo scenario" data-testid="demo-scenario-guide">
       <Route size={13} className="text-[color:var(--brand-3)] shrink-0" />
       <span className="text-[10px] font-mono text-[color:var(--ink-3)] shrink-0">DEMO PATH</span>
       {steps.map((step, index) => (

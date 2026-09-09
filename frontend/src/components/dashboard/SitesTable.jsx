@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { ChevronRight, Search, MapPin, AlertTriangle, Loader2 } from "lucide-react";
+import WeatherChip from "@/components/weather/WeatherChip";
 
 /** Sites table backed by /api/fleet/sites — sortable, searchable, category-filtered */
 export default function SitesTable({ category }) {
@@ -10,6 +11,7 @@ export default function SitesTable({ category }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [limit] = useState(20);
+  const [weatherChips, setWeatherChips] = useState({});
 
   useEffect(() => {
     let mounted = true;
@@ -22,6 +24,12 @@ export default function SitesTable({ category }) {
         if (!mounted) return;
         setRows(data.items);
         setTotal(data.total);
+        const ids = data.items.map((s) => s.site_id).slice(0, 20).join(",");
+        if (ids) {
+          api.get("/fleet/weather/batch", { params: { site_ids: ids } })
+            .then(({ data: chips }) => mounted && setWeatherChips(chips))
+            .catch(() => {});
+        }
       })
       .catch(() => mounted && setRows([]))
       .finally(() => mounted && setLoading(false));
@@ -73,6 +81,7 @@ export default function SitesTable({ category }) {
               <tr className="text-[10px] font-mono text-[color:var(--ink-3)] border-b border-[color:var(--line-2)]">
                 <th className="text-left py-2 px-2">SITE</th>
                 <th className="text-left py-2 px-2">STATE</th>
+                <th className="text-left py-2 px-2">WEATHER</th>
                 <th className="text-right py-2 px-2">CAPACITY (kW)</th>
                 <th className="text-right py-2 px-2">PR%</th>
                 <th className="text-right py-2 px-2">AVAIL%</th>
@@ -99,6 +108,9 @@ export default function SitesTable({ category }) {
                     </td>
                     <td className="py-2 px-2 text-xs text-[color:var(--ink-2)]">
                       <span className="inline-flex items-center gap-1"><MapPin size={10} /> {s.state}</span>
+                    </td>
+                    <td className="py-2 px-2">
+                      <WeatherChip chip={weatherChips[s.site_id]} />
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-xs text-[color:var(--ink)]">
                       {s.site_capacity_kW?.toFixed?.(1) ?? "—"}

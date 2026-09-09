@@ -79,7 +79,10 @@ const ROUTE_FEATURE = { "/overview": "overview", "/dashboard": "portfolio", "/as
 
 export function visibleAppItems(user, features = {}) {
   if (!user) return [];
-  if (user.role === "admin") return APP_NAV;                     // super-role sees all 8
+  if (user.role === "admin") {
+    // super-role sees all 8, but still respects feature-flag toggles instantly
+    return APP_NAV.filter((it) => features[ROUTE_FEATURE[it.to]] !== false);
+  }
   if (SOLO_NAV[user.role]) {
     return SOLO_NAV[user.role].filter((item) => features[ROUTE_FEATURE[item.to]] !== false);
   }

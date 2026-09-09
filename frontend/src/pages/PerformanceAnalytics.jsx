@@ -230,6 +230,9 @@ export default function PerformanceAnalytics() {
         </div>
       </div>
 
+      {/* Weather correlation */}
+      <WeatherCorrelationPanel category={category} />
+
       {/* Data quality summary */}
       <div className="gs-card p-6 mt-6" data-testid="perf-data-quality">
         <div className="flex items-center justify-between mb-4">
@@ -245,6 +248,70 @@ export default function PerformanceAnalytics() {
           <DqTile label="Sites w/ no open alarms" value={dq.noAlarms} total={dq.total} testid="dq-no-alarms" />
         </div>
       </div>
+    </div>
+  );
+}
+
+function WeatherCorrelationPanel({ category }) {
+  const [points, setPoints] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.get("/fleet/weather/correlation", { params: category ? { category, days: 14 } : { days: 14 } })
+      .then(({ data }) => mounted && setPoints(data.points || []))
+      .catch(() => mounted && setPoints([]))
+      .finally(() => mounted && setLoading(false));
+    return () => { mounted = false; };
+  }, [category]);
+
+  const maxGhi = Math.max(1, ...points.map((p) => p.avg_ghi_w_m2));
+  const maxLost = Math.max(1, ...points.map((p) => p.total_lost_kWh));
+  const maxTemp = Math.max(1, ...points.map((p) => Math.max(p.avg_module_temp_c, p.avg_ambient_temp_c)));
+
+  return (
+    <div className="gs-card p-6 mt-6" data-testid="perf-weather-correlation">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="font-mono text-[10px] text-[color:var(--ink-3)]">WEATHER CORRELATION</div>
+          <div className="text-sm text-[color:var(--ink)] mt-1">
+            Production vs irradiance &amp; ambient vs module temperature — last {points.length} days
+          </div>
+        </div>
+        <CloudSun size={14} className="text-[color:var(--brand-3)]" />
+      </div>
+      <p className="text-[11px] text-[color:var(--ink-3)] mb-4">
+        Context only — reduced output on high-cloud / low-irradiance days is expected and is not automatically
+        treated as an equipment failure.
+      </p>
+      {loading ? (
+        <div className="text-[color:var(--ink-3)] text-sm flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Loading…</div>
+      ) : points.length === 0 ? (
+        <div className="text-[color:var(--ink-3)] text-sm">No overlapping performance/weather data in this filter.</div>
+      ) : (
+        <div className="space-y-2 max-h-72 overflow-y-auto" data-testid="weather-correlation-rows">
+          {points.map((p) => (
+            <div key={p.date} className="grid grid-cols-[70px_1fr_1fr_1fr] items-center gap-3 text-[11px]" data-testid={`weather-corr-${p.date}`}>
+              <span className="font-mono text-[color:var(--ink-3)]">{p.date.slice(5)}</span>
+              <Bar label={`GHI ${p.avg_ghi_w_m2}`} pct={(p.avg_ghi_w_m2 / maxGhi) * 100} color="#d97706" />
+              <Bar label={`Lost ${p.total_lost_kWh} kWh`} pct={(p.total_lost_kWh / maxLost) * 100} color="#b91c1c" />
+              <Bar label={`Mod ${p.avg_module_temp_c}° / Amb ${p.avg_ambient_temp_c}°C`} pct={(p.avg_module_temp_c / maxTemp) * 100} color="var(--brand)" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Bar({ label, pct, color }) {
+  return (
+    <div>
+      <div className="h-1.5 rounded-full bg-[color:var(--bg-3)] overflow-hidden">
+        <div className="h-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
+      </div>
+      <div className="text-[10px] text-[color:var(--ink-3)] mt-0.5">{label}</div>
     </div>
   );
 }

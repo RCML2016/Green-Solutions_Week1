@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 
 from deps import db, get_current_user
 import demo_scope
+import weather as weather_mod
 
 router = APIRouter(prefix="/fleet", tags=["fleet"])
 
@@ -208,6 +209,8 @@ async def fleet_kpis(
 async def list_sites(
     category: Optional[str] = None,
     state: Optional[str] = None,
+    city: Optional[str] = None,
+    zip_code: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=500),
     skip: int = Query(default=0, ge=0),
@@ -221,6 +224,10 @@ async def list_sites(
         q["site_type"] = category
     if state:
         q["state"] = state
+    if city:
+        q["city"] = {"$regex": f"^{city}$", "$options": "i"}
+    if zip_code:
+        q["zip_code"] = zip_code
     if search:
         q["$or"] = [
             {"site_id": {"$regex": search, "$options": "i"}},
@@ -268,6 +275,7 @@ async def list_sites(
             "latest_revenue_loss_usd": p.get("estimated_revenue_loss_usd"),
             "open_alarms": a.get("open_alarms", 0),
             "high_sev_alarms": a.get("high_sev", 0),
+            "location_label": weather_mod.location_label(s),
         })
     return {"total": total, "items": enriched}
 
@@ -277,6 +285,7 @@ async def site_detail(site_id: str, user: dict = Depends(get_current_user)):
     site = await db.fleet_sites.find_one({"site_id": site_id}, {"_id": 0})
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    site.setdefault("version", 1)
 
     demo_active = await demo_scope.is_demo_scope_active(user)
     demo_asset_ids = sorted(await demo_scope.get_demo_asset_id_set([site_id])) if demo_active else None
@@ -323,6 +332,7 @@ async def site_detail(site_id: str, user: dict = Depends(get_current_user)):
 
     return {
         "site": site,
+        "location_label": weather_mod.location_label(site),
         "assets": assets,
         "asset_breakdown": [{"type": k, "count": v} for k, v in breakdown.items()],
         "latest_performance": latest_perf,
@@ -331,6 +341,118 @@ async def site_detail(site_id: str, user: dict = Depends(get_current_user)):
         "work_orders": wos,
         "demo_scope_active": demo_active,
     }
+
+
+@router.get("/sites/{site_id}/weather")
+async def site_weather(site_id: str, _user: dict = Depends(get_current_user)):
+    """Live current + 7-day forecast weather for a site, cached ~20min."""
+    site = await db.fleet_sites.find_one({"site_id": site_id}, {"_id": 0})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    query = weather_mod.resolve_location_query(site)
+    payload = await weather_mod.get_weather(query)
+    return {**payload, "location_label": weather_mod.location_label(site), "source": "site"}
+
+
+@router.get("/assets/{asset_id}/weather")
+async def asset_weather(asset_id: str, _user: dict = Depends(get_current_user)):
+    """Live weather for an asset — inherits its site's location unless the
+    asset has its own ZIP/coordinates on file."""
+    asset = await db.fleet_assets.find_one({"asset_id": asset_id}, {"_id": 0})
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    site = await db.fleet_sites.find_one({"site_id": asset.get("site_id")}, {"_id": 0})
+    query = weather_mod.resolve_location_query(site, asset)
+    payload = await weather_mod.get_weather(query)
+    inherited = not (asset.get("zip_code") or (asset.get("latitude") is not None and asset.get("longitude") is not None))
+    return {
+        **payload,
+        "location_label": weather_mod.location_label(site, asset),
+        "source": "site" if inherited else "asset",
+        "inherited_from_site": inherited,
+    }
+
+
+@router.get("/weather/batch")
+async def weather_batch(site_ids: str, _user: dict = Depends(get_current_user)):
+    """Compact weather (for table chips) for up to 20 sites at once — cache-backed,
+    so repeated dashboard polls don't multiply upstream API calls."""
+    ids = [s for s in site_ids.split(",") if s][:20]
+    if not ids:
+        return {}
+    sites = await db.fleet_sites.find({"site_id": {"$in": ids}}, {"_id": 0}).to_list(len(ids))
+    out: Dict[str, Any] = {}
+    for s in sites:
+        query = weather_mod.resolve_location_query(s)
+        payload = await weather_mod.get_weather(query)
+        out[s["site_id"]] = {
+            "available": payload.get("available"),
+            "temp_c": (payload.get("current") or {}).get("temp_c"),
+            "icon": (payload.get("current") or {}).get("icon"),
+            "condition": (payload.get("current") or {}).get("condition"),
+            "impact_level": payload.get("impact_level"),
+            "data_status": payload.get("data_status"),
+        }
+    return out
+
+
+@router.get("/weather/correlation")
+async def weather_correlation(
+    category: Optional[str] = None,
+    days: int = Query(default=14, ge=3, le=60),
+    user: dict = Depends(get_current_user),
+):
+    """Historical weather-vs-performance correlation, from the simulated
+    fleet_weather + fleet_performance backtest data (NOT the live WeatherAPI
+    feed — that's for current/forecast only). Powers the "Weather Correlation"
+    panel on Performance Analytics."""
+    site_match: Dict[str, Any] = {}
+    if category:
+        site_match["site_type"] = category
+    if await demo_scope.is_demo_scope_active(user):
+        site_match["site_id"] = {"$in": sorted(await demo_scope.get_demo_site_id_set(category))}
+
+    site_ids = [s["site_id"] async for s in db.fleet_sites.find(site_match, {"_id": 0, "site_id": 1})]
+    if not site_ids:
+        return {"points": []}
+
+    perf_pipeline = [
+        {"$match": {"site_id": {"$in": site_ids}}},
+        {"$group": {"_id": "$date", "avg_pr": {"$avg": "$performance_ratio_pct"}, "total_lost_kWh": {"$sum": "$lost_kWh"}}},
+        {"$sort": {"_id": -1}},
+        {"$limit": days},
+    ]
+    perf_by_date = {d["_id"]: d async for d in db.fleet_performance.aggregate(perf_pipeline)}
+    if not perf_by_date:
+        return {"points": []}
+
+    weather_pipeline = [
+        {"$match": {"site_id": {"$in": site_ids}}},
+        {"$addFields": {"date": {"$substrCP": ["$timestamp", 0, 10]}}},
+        {"$match": {"date": {"$in": list(perf_by_date.keys())}}},
+        {"$group": {
+            "_id": "$date",
+            "avg_ghi": {"$avg": "$ghi_W_m2"},
+            "avg_module_temp": {"$avg": "$module_temp_C"},
+            "avg_ambient_temp": {"$avg": "$ambient_temp_C"},
+            "avg_wind": {"$avg": "$wind_speed_mps"},
+        }},
+    ]
+    weather_by_date = {d["_id"]: d async for d in db.fleet_weather.aggregate(weather_pipeline)}
+
+    points = []
+    for date, p in sorted(perf_by_date.items()):
+        w = weather_by_date.get(date, {})
+        points.append({
+            "date": date,
+            "avg_pr_pct": round(p.get("avg_pr") or 0, 2),
+            "total_lost_kWh": round(p.get("total_lost_kWh") or 0, 1),
+            "avg_ghi_w_m2": round(w.get("avg_ghi") or 0, 1),
+            "avg_module_temp_c": round(w.get("avg_module_temp") or 0, 1),
+            "avg_ambient_temp_c": round(w.get("avg_ambient_temp") or 0, 1),
+            "avg_wind_mps": round(w.get("avg_wind") or 0, 1),
+        })
+    return {"points": points}
 
 
 # --------- Telemetry: simulated live window ---------

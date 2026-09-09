@@ -49,6 +49,9 @@ class SiteWrite(BaseModel):
     state: str = Field(min_length=2, max_length=60)
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    address: Optional[str] = Field(default=None, max_length=200)
+    city: Optional[str] = Field(default=None, max_length=100)
+    zip_code: Optional[str] = Field(default=None, max_length=15)
     cod_date: Optional[str] = Field(default=None, max_length=30)
     owner_client: Optional[str] = Field(default=None, max_length=120)
     version: Optional[int] = Field(default=None, ge=1)
@@ -61,6 +64,9 @@ class SitePatch(BaseModel):
     state: Optional[str] = Field(default=None, min_length=2, max_length=60)
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    address: Optional[str] = Field(default=None, max_length=200)
+    city: Optional[str] = Field(default=None, max_length=100)
+    zip_code: Optional[str] = Field(default=None, max_length=15)
     cod_date: Optional[str] = Field(default=None, max_length=30)
     owner_client: Optional[str] = Field(default=None, max_length=120)
     version: int = Field(ge=1)
@@ -76,6 +82,9 @@ class AssetWrite(BaseModel):
     nameplate_kW: Optional[float] = Field(default=None, gt=0, le=10_000_000)
     install_date: Optional[str] = Field(default=None, max_length=30)
     status: str = Field(default="Active", max_length=30)
+    zip_code: Optional[str] = Field(default=None, max_length=15)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
 
 
 class AssetPatch(BaseModel):
@@ -87,6 +96,9 @@ class AssetPatch(BaseModel):
     nameplate_kW: Optional[float] = Field(default=None, gt=0, le=10_000_000)
     install_date: Optional[str] = Field(default=None, max_length=30)
     status: Optional[str] = Field(default=None, max_length=30)
+    zip_code: Optional[str] = Field(default=None, max_length=15)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     version: int = Field(ge=1)
 
 
@@ -117,8 +129,9 @@ async def update_site(site_id: str, payload: SitePatch, user: dict = Depends(man
     if not before: raise HTTPException(404, "Site not found")
     changes = payload.model_dump(exclude={"version"}, exclude_unset=True) | {"updated_at": now(), "updated_by": actor(user)}
     after = await db.fleet_sites.find_one_and_update(
-        {"site_id": site_id, "version": payload.version},
-        {"$set": changes, "$inc": {"version": 1}}, projection={"_id": 0},
+        {"site_id": site_id, "$expr": {"$eq": [{"$ifNull": ["$version", 1]}, payload.version]}},
+        [{"$set": {**changes, "version": {"$add": [{"$ifNull": ["$version", 1]}, 1]}}}],
+        projection={"_id": 0},
         return_document=ReturnDocument.AFTER)
     if not after: raise HTTPException(409, "This record changed since you opened it; refresh and retry")
     await audit(user, "update", "site", site_id, before, after)
@@ -190,8 +203,22 @@ async def list_assets(site_id: Optional[str] = None, asset_type: Optional[str] =
     total = await db.fleet_assets.count_documents(q)
     rows = await db.fleet_assets.find(q, {"_id": 0}).sort("asset_id", 1).skip(skip).limit(limit).to_list(limit)
     site_ids = list({r.get("site_id") for r in rows})
-    names = {s["site_id"]: s.get("site_name") async for s in db.fleet_sites.find({"site_id": {"$in": site_ids}}, {"_id": 0, "site_id": 1, "site_name": 1})}
-    return {"total": total, "items": [r | {"site_name": names.get(r.get("site_id"))} for r in rows]}
+    site_lookup = {
+        s["site_id"]: s async for s in db.fleet_sites.find(
+            {"site_id": {"$in": site_ids}}, {"_id": 0, "site_id": 1, "site_name": 1, "state": 1, "city": 1, "zip_code": 1}
+        )
+    }
+    items = []
+    for r in rows:
+        site = site_lookup.get(r.get("site_id"), {})
+        items.append(r | {
+            "site_name": site.get("site_name"),
+            "state": r.get("state") or site.get("state"),
+            "city": r.get("city") or site.get("city"),
+            "zip_code": r.get("zip_code") or site.get("zip_code"),
+            "location_inherited": not bool(r.get("zip_code") or r.get("latitude")),
+        })
+    return {"total": total, "items": items}
 
 
 @router.post("/assets", status_code=201)
@@ -211,7 +238,7 @@ async def update_asset(asset_id: str, payload: AssetPatch, user: dict = Depends(
     changes = payload.model_dump(exclude={"version"}, exclude_unset=True)
     if changes.get("site_id"): await active_site(changes["site_id"])
     changes |= {"updated_at": now(), "updated_by": actor(user)}
-    after = await db.fleet_assets.find_one_and_update({"asset_id": asset_id, "version": payload.version}, {"$set": changes, "$inc": {"version": 1}}, projection={"_id": 0}, return_document=ReturnDocument.AFTER)
+    after = await db.fleet_assets.find_one_and_update({"asset_id": asset_id, "$expr": {"$eq": [{"$ifNull": ["$version", 1]}, payload.version]}}, [{"$set": {**changes, "version": {"$add": [{"$ifNull": ["$version", 1]}, 1]}}}], projection={"_id": 0}, return_document=ReturnDocument.AFTER)
     if not after: raise HTTPException(409, "This record changed since you opened it; refresh and retry")
     await audit(user, "update", "asset", asset_id, before, after); return after
 

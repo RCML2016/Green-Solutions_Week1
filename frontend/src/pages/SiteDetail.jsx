@@ -5,6 +5,7 @@ import {
   ArrowLeft, MapPin, Zap, Sun, Wind, Battery, AlertTriangle,
   Wrench, Cpu, Thermometer, Loader2, Activity,
 } from "lucide-react";
+import WeatherSummaryCard from "@/components/weather/WeatherSummaryCard";
 
 /** Site drill-down: assets, telemetry, weather, alarms, work orders. */
 export default function SiteDetail() {
@@ -12,6 +13,7 @@ export default function SiteDetail() {
   const [detail, setDetail] = useState(null);
   const [telemetry, setTelemetry] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [weather, setWeather] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -20,6 +22,9 @@ export default function SiteDetail() {
       .then(({ data }) => mounted && setDetail(data))
       .catch(() => mounted && setDetail(null))
       .finally(() => mounted && setLoading(false));
+    api.get(`/fleet/sites/${site_id}/weather`)
+      .then(({ data }) => mounted && setWeather(data))
+      .catch(() => {});
     return () => { mounted = false; };
   }, [site_id]);
 
@@ -57,9 +62,10 @@ export default function SiteDetail() {
     );
   }
 
-  const { site, assets, asset_breakdown, latest_performance, latest_weather, recent_alarms, work_orders } = detail;
+  const { site, assets, asset_breakdown, latest_performance, latest_weather, recent_alarms, work_orders, location_label } = detail;
   const catIcons = { "Solar PV": Sun, "Wind": Wind, "BESS": Battery };
   const Icon = catIcons[site.energy_type] || Sun;
+  const severeWeatherActive = weather?.available && (weather.impact_level === "High Impact" || weather.impact_level === "Severe Weather Risk");
 
   return (
     <div className="px-6 lg:px-14 py-10 min-h-[80vh] space-y-6" data-testid="site-detail-page">
@@ -75,8 +81,10 @@ export default function SiteDetail() {
           <div className="flex-1 min-w-0">
             <div className="text-xs font-mono text-[color:var(--brand-3)]">{site.site_id} · {site.site_type}</div>
             <h1 className="font-display text-3xl text-[color:var(--ink)] mt-1">{site.site_name}</h1>
+            <div className="text-[color:var(--ink-2)] text-sm mt-1" data-testid="site-location-label">
+              <MapPin size={12} className="inline mr-1 -mt-0.5" />{location_label}
+            </div>
             <div className="text-[color:var(--ink-3)] text-sm mt-1 flex items-center gap-4 flex-wrap">
-              <span className="inline-flex items-center gap-1"><MapPin size={12} /> {site.state}</span>
               <span>{site.energy_type}</span>
               <span>Capacity: <strong className="text-[color:var(--ink)] font-mono">{site.site_capacity_kW?.toFixed(1)} kW</strong></span>
               <span>Utility: {site.utility}</span>
@@ -134,6 +142,19 @@ export default function SiteDetail() {
           </div>
         </div>
       </div>
+
+      {/* Live weather */}
+      <WeatherSummaryCard data={weather} locationLabel={location_label} />
+
+      {severeWeatherActive && (
+        <div className="gs-card p-4 border-amber-200 bg-amber-50 flex items-start gap-2 text-sm text-amber-900" data-testid="severe-weather-performance-note">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <span>
+            Active weather conditions ({weather.impact_level}) may be contributing to reduced performance or
+            open alarms below — weather is context, not an automatic equipment-failure diagnosis.
+          </span>
+        </div>
+      )}
 
       {/* Telemetry chart (from sliding window) */}
       <div className="gs-card p-6" data-testid="site-telemetry">
