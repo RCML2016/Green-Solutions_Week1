@@ -255,7 +255,7 @@ async def import_rows(entity_type: Literal["sites", "assets"], file: UploadFile 
 async def audit_log(entity_type: Optional[str] = None, action: Optional[str] = None,
                     limit: int = Query(100, ge=1, le=500), skip: int = Query(0, ge=0),
                     user: dict = Depends(admin_guard)):
-    q = {}; 
+    q = {}
     if entity_type: q["entity_type"] = entity_type
     if action: q["action"] = action
     total = await db.fleet_audit_log.count_documents(q)
