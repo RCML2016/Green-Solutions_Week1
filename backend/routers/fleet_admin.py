@@ -15,6 +15,7 @@ from pymongo import ReturnDocument
 
 from deps import db, get_current_user
 from rbac import role_required
+import demo_scope
 
 router = APIRouter(prefix="/fleet-admin", tags=["fleet-admin"])
 manager_guard = role_required("asset_manager")
@@ -106,6 +107,7 @@ async def create_site(payload: SiteWrite, user: dict = Depends(manager_guard)):
     }
     await db.fleet_sites.insert_one(doc.copy())
     await audit(user, "create", "site", payload.site_id, after=doc)
+    demo_scope.bump_demo_cache()
     return doc
 
 
@@ -135,6 +137,7 @@ async def retire_site(site_id: str, user: dict = Depends(admin_guard)):
     await db.fleet_sites.update_one({"site_id": site_id}, {"$set": {"lifecycle_status": "retired", "retired_at": stamp, "retired_by": actor(user), "updated_at": stamp}, "$inc": {"version": 1}})
     after = await db.fleet_sites.find_one({"site_id": site_id}, {"_id": 0})
     await audit(user, "retire", "site", site_id, before, after)
+    demo_scope.bump_demo_cache()
     return after
 
 
@@ -145,6 +148,20 @@ async def restore_site(site_id: str, user: dict = Depends(admin_guard)):
     await db.fleet_sites.update_one({"site_id": site_id}, {"$set": {"lifecycle_status": "active", "updated_at": now(), "updated_by": actor(user)}, "$unset": {"retired_at": "", "retired_by": ""}, "$inc": {"version": 1}})
     after = await db.fleet_sites.find_one({"site_id": site_id}, {"_id": 0})
     await audit(user, "restore", "site", site_id, before, after)
+    demo_scope.bump_demo_cache()
+    return after
+
+
+@router.post("/sites/{site_id}/toggle-featured")
+async def toggle_site_featured(site_id: str, user: dict = Depends(admin_guard)):
+    """Mark/unmark a site as a curated demo representative (featured_for_demo)."""
+    before = await db.fleet_sites.find_one({"site_id": site_id}, {"_id": 0})
+    if not before: raise HTTPException(404, "Site not found")
+    new_val = not before.get("featured_for_demo", False)
+    await db.fleet_sites.update_one({"site_id": site_id}, {"$set": {"featured_for_demo": new_val, "updated_at": now(), "updated_by": actor(user)}})
+    after = await db.fleet_sites.find_one({"site_id": site_id}, {"_id": 0})
+    await audit(user, "toggle_featured", "site", site_id, before, after)
+    demo_scope.bump_demo_cache()
     return after
 
 
@@ -160,6 +177,16 @@ async def list_assets(site_id: Optional[str] = None, asset_type: Optional[str] =
     if search:
         safe = re.escape(search)
         q["$or"] = [{k: {"$regex": safe, "$options": "i"}} for k in ("asset_id", "make", "model", "serial_number")]
+
+    if await demo_scope.is_demo_scope_active(user):
+        demo_site_ids = await demo_scope.get_demo_site_id_set()
+        if site_id:
+            scoped_sites = [site_id] if site_id in demo_site_ids else []
+        else:
+            scoped_sites = sorted(demo_site_ids)
+        demo_asset_ids = sorted(await demo_scope.get_demo_asset_id_set(scoped_sites))
+        q["asset_id"] = {"$in": demo_asset_ids}
+
     total = await db.fleet_assets.count_documents(q)
     rows = await db.fleet_assets.find(q, {"_id": 0}).sort("asset_id", 1).skip(skip).limit(limit).to_list(limit)
     site_ids = list({r.get("site_id") for r in rows})
@@ -173,6 +200,7 @@ async def create_asset(payload: AssetWrite, user: dict = Depends(manager_guard))
     await active_site(payload.site_id)
     doc = payload.model_dump() | {"lifecycle_status": "active", "version": 1, "created_at": now(), "created_by": actor(user), "updated_at": now(), "updated_by": actor(user)}
     await db.fleet_assets.insert_one(doc.copy()); await audit(user, "create", "asset", payload.asset_id, after=doc)
+    demo_scope.bump_demo_cache()
     return doc
 
 
@@ -196,7 +224,9 @@ async def retire_asset(asset_id: str, user: dict = Depends(admin_guard)):
     open_alarms = await db.fleet_alarms.count_documents({"asset_id": asset_id, "status": {"$ne": "Resolved"}})
     if open_wos or open_alarms: raise HTTPException(409, {"message": "Asset has active dependencies", "open_work_orders": open_wos, "open_alarms": open_alarms})
     stamp = now(); await db.fleet_assets.update_one({"asset_id": asset_id}, {"$set": {"lifecycle_status": "retired", "status": "Retired", "retired_at": stamp, "retired_by": actor(user)}, "$inc": {"version": 1}})
-    after = await db.fleet_assets.find_one({"asset_id": asset_id}, {"_id": 0}); await audit(user, "retire", "asset", asset_id, before, after); return after
+    after = await db.fleet_assets.find_one({"asset_id": asset_id}, {"_id": 0}); await audit(user, "retire", "asset", asset_id, before, after)
+    demo_scope.bump_demo_cache()
+    return after
 
 
 @router.post("/assets/{asset_id}/restore")
@@ -205,7 +235,22 @@ async def restore_asset(asset_id: str, user: dict = Depends(admin_guard)):
     if not before: raise HTTPException(404, "Retired asset not found")
     await active_site(before["site_id"])
     await db.fleet_assets.update_one({"asset_id": asset_id}, {"$set": {"lifecycle_status": "active", "status": "Active", "updated_at": now(), "updated_by": actor(user)}, "$unset": {"retired_at": "", "retired_by": ""}, "$inc": {"version": 1}})
-    after = await db.fleet_assets.find_one({"asset_id": asset_id}, {"_id": 0}); await audit(user, "restore", "asset", asset_id, before, after); return after
+    after = await db.fleet_assets.find_one({"asset_id": asset_id}, {"_id": 0}); await audit(user, "restore", "asset", asset_id, before, after)
+    demo_scope.bump_demo_cache()
+    return after
+
+
+@router.post("/assets/{asset_id}/toggle-featured")
+async def toggle_asset_featured(asset_id: str, user: dict = Depends(admin_guard)):
+    """Mark/unmark an asset as a curated demo representative (featured_for_demo)."""
+    before = await db.fleet_assets.find_one({"asset_id": asset_id}, {"_id": 0})
+    if not before: raise HTTPException(404, "Asset not found")
+    new_val = not before.get("featured_for_demo", False)
+    await db.fleet_assets.update_one({"asset_id": asset_id}, {"$set": {"featured_for_demo": new_val, "updated_at": now(), "updated_by": actor(user)}})
+    after = await db.fleet_assets.find_one({"asset_id": asset_id}, {"_id": 0})
+    await audit(user, "toggle_featured", "asset", asset_id, before, after)
+    demo_scope.bump_demo_cache()
+    return after
 
 
 def uploaded_rows(content: bytes, filename: str) -> List[dict]:
@@ -248,6 +293,7 @@ async def import_rows(entity_type: Literal["sites", "assets"], file: UploadFile 
         stamp = now(); docs = [v | {"lifecycle_status": "active", "version": 1, "created_at": stamp, "created_by": actor(user), "updated_at": stamp, "updated_by": actor(user)} for v in valid]
         coll = db.fleet_sites if entity_type == "sites" else db.fleet_assets; await coll.insert_many(docs, ordered=True)
         result["committed"] = len(docs); await audit(user, "bulk_import", entity_type[:-1], "bulk", metadata={"filename": file.filename, "count": len(docs)})
+        demo_scope.bump_demo_cache()
     return result
 
 

@@ -26,6 +26,7 @@ from models import (
 )
 from rbac import MVP_ROLES
 import storage
+import demo_scope
 from workspace import require_external_side_effects
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])
@@ -156,6 +157,11 @@ async def client_portfolio(user: dict = Depends(get_current_user)):
         q = {"site_type": {"$in": categories}}
 
     sites = await db.fleet_sites.find(q, {"_id": 0}).sort("site_id", 1).limit(200).to_list(200)
+
+    if await demo_scope.is_demo_scope_active(user):
+        demo_ids = await demo_scope.get_demo_site_id_set()
+        sites = [s for s in sites if s["site_id"] in demo_ids]
+
     site_ids_scope = [s["site_id"] for s in sites]
 
     # Perf aggregates over scope

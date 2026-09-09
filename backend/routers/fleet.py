@@ -23,6 +23,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Query
 
 from deps import db, get_current_user
+import demo_scope
 
 router = APIRouter(prefix="/fleet", tags=["fleet"])
 
@@ -45,6 +46,26 @@ CATEGORY_ORDER = [c["category"] for c in PRIORITY_SUMMARY]
 @router.get("/categories")
 async def list_categories(user: dict = Depends(get_current_user)):
     """Return per-category headline stats — site count, total capacity, priority tier."""
+    demo_active = await demo_scope.is_demo_scope_active(user)
+
+    if demo_active:
+        demo_by_cat = await demo_scope.get_demo_site_ids_by_category()
+        out: List[Dict[str, Any]] = []
+        for entry in PRIORITY_SUMMARY:
+            cat = entry["category"]
+            site_ids = demo_by_cat.get(cat, [])
+            sites = await db.fleet_sites.find(
+                {"site_id": {"$in": site_ids}}, {"_id": 0, "site_capacity_kW": 1}
+            ).to_list(len(site_ids) or 1)
+            demo_asset_ids = await demo_scope.get_demo_asset_id_set(site_ids)
+            out.append({
+                **entry,
+                "site_count": len(site_ids),
+                "total_capacity_kW": round(sum((s.get("site_capacity_kW") or 0) for s in sites), 1),
+                "asset_count": len(demo_asset_ids),
+            })
+        return out
+
     pipeline = [
         {"$group": {
             "_id": "$site_type",
@@ -85,9 +106,13 @@ async def fleet_kpis(
     user: dict = Depends(get_current_user),
 ):
     """Fleet-level KPIs computed from performance + alarms + sites."""
+    demo_active = await demo_scope.is_demo_scope_active(user)
     site_match: Dict[str, Any] = {}
     if category:
         site_match["site_type"] = category
+    if demo_active:
+        demo_ids = await demo_scope.get_demo_site_id_set(category)
+        site_match["site_id"] = {"$in": sorted(demo_ids)}
 
     # Sites in scope
     sites_cursor = db.fleet_sites.find(site_match, {"_id": 0, "site_id": 1, "site_capacity_kW": 1})
@@ -95,10 +120,10 @@ async def fleet_kpis(
     site_ids = [s["site_id"] for s in sites]
     total_capacity = sum((s.get("site_capacity_kW") or 0) for s in sites)
 
-    # Short-circuit: category was requested but matched zero sites — return empty aggregates.
-    if category and not site_ids:
+    # Short-circuit: category (or demo scope) matched zero sites — return empty aggregates.
+    if (category or demo_active) and not site_ids:
         return {
-            "category": category,
+            "category": category or "All Categories",
             "site_count": 0, "asset_count": 0, "active_assets": 0,
             "total_capacity_kW": 0, "total_capacity_MW": 0,
             "avg_performance_ratio_pct": 0, "avg_availability_pct": 0, "avg_degradation_pct": 0,
@@ -110,8 +135,10 @@ async def fleet_kpis(
         }
 
     id_filter = {"$in": site_ids} if site_ids else None
+    demo_asset_ids = sorted(await demo_scope.get_demo_asset_id_set(site_ids)) if demo_active else None
+    asset_id_filter = {"$in": demo_asset_ids} if demo_asset_ids is not None else None
 
-    # Performance aggregates
+    # Performance aggregates (site-level rows — scoped by demo site selection)
     perf_match: Dict[str, Any] = {"site_id": id_filter} if id_filter else {}
     perf_pipeline = [
         {"$match": perf_match},
@@ -131,20 +158,28 @@ async def fleet_kpis(
         perf_doc = d
     perf = perf_doc or {}
 
-    # Alarms count
+    # Alarms count — also scoped to the demo asset subset when active
     alarm_match: Dict[str, Any] = {"site_id": id_filter} if id_filter else {}
+    if asset_id_filter is not None:
+        alarm_match["asset_id"] = asset_id_filter
     total_alarms = await db.fleet_alarms.count_documents(alarm_match)
     high_sev = await db.fleet_alarms.count_documents({**alarm_match, "severity": {"$in": ["High", "Critical"]}})
     open_alarms = await db.fleet_alarms.count_documents({**alarm_match, "status": {"$ne": "Resolved"}})
 
-    # Work orders
+    # Work orders — also scoped to the demo asset subset when active
     wo_match: Dict[str, Any] = {"site_id": id_filter} if id_filter else {}
+    if asset_id_filter is not None:
+        wo_match["asset_id"] = asset_id_filter
     open_wos = await db.fleet_work_orders.count_documents({**wo_match, "status": {"$ne": "Resolved"}})
 
     # Assets count
-    asset_match: Dict[str, Any] = {"site_id": id_filter} if id_filter else {}
-    total_assets = await db.fleet_assets.count_documents(asset_match)
-    active_assets = await db.fleet_assets.count_documents({**asset_match, "status": "Active"})
+    if demo_asset_ids is not None:
+        total_assets = len(demo_asset_ids)
+        active_assets = await db.fleet_assets.count_documents({"asset_id": {"$in": demo_asset_ids}, "status": "Active"})
+    else:
+        asset_match: Dict[str, Any] = {"site_id": id_filter} if id_filter else {}
+        total_assets = await db.fleet_assets.count_documents(asset_match)
+        active_assets = await db.fleet_assets.count_documents({**asset_match, "status": "Active"})
 
     return {
         "category": category or "All Categories",
@@ -192,6 +227,11 @@ async def list_sites(
             {"site_name": {"$regex": search, "$options": "i"}},
         ]
 
+    demo_active = await demo_scope.is_demo_scope_active(user)
+    if demo_active:
+        demo_ids = await demo_scope.get_demo_site_id_set(category)
+        q["site_id"] = {"$in": sorted(demo_ids)}
+
     total = await db.fleet_sites.count_documents(q)
     cursor = db.fleet_sites.find(q, {"_id": 0}).sort("site_id", 1).skip(skip).limit(limit)
     sites = await cursor.to_list(limit)
@@ -238,9 +278,15 @@ async def site_detail(site_id: str, user: dict = Depends(get_current_user)):
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    demo_active = await demo_scope.is_demo_scope_active(user)
+    demo_asset_ids = sorted(await demo_scope.get_demo_asset_id_set([site_id])) if demo_active else None
+
     # Assets
+    asset_q: Dict[str, Any] = {"site_id": site_id}
+    if demo_asset_ids is not None:
+        asset_q["asset_id"] = {"$in": demo_asset_ids}
     assets = await db.fleet_assets.find(
-        {"site_id": site_id}, {"_id": 0}
+        asset_q, {"_id": 0}
     ).sort("asset_id", 1).limit(500).to_list(500)
 
     # Latest performance
@@ -249,13 +295,19 @@ async def site_detail(site_id: str, user: dict = Depends(get_current_user)):
     )
 
     # Recent alarms (top 25)
+    alarm_q: Dict[str, Any] = {"site_id": site_id}
+    if demo_asset_ids is not None:
+        alarm_q["asset_id"] = {"$in": demo_asset_ids}
     alarms = await db.fleet_alarms.find(
-        {"site_id": site_id}, {"_id": 0}
+        alarm_q, {"_id": 0}
     ).sort("timestamp", -1).limit(25).to_list(25)
 
     # Related work orders (top 25)
+    wo_q: Dict[str, Any] = {"site_id": site_id}
+    if demo_asset_ids is not None:
+        wo_q["asset_id"] = {"$in": demo_asset_ids}
     wos = await db.fleet_work_orders.find(
-        {"site_id": site_id}, {"_id": 0}
+        wo_q, {"_id": 0}
     ).sort("work_order_id", -1).limit(25).to_list(25)
 
     # Latest weather
@@ -277,6 +329,7 @@ async def site_detail(site_id: str, user: dict = Depends(get_current_user)):
         "latest_weather": latest_weather,
         "recent_alarms": alarms,
         "work_orders": wos,
+        "demo_scope_active": demo_active,
     }
 
 
@@ -293,8 +346,13 @@ async def site_telemetry(
 
     Per-asset rows are aggregated to a single timeseries by summing power_kW /
     expected_power_kW across all assets at each timestamp."""
+    demo_active = await demo_scope.is_demo_scope_active(user)
+    match: Dict[str, Any] = {"site_id": site_id}
+    if demo_active:
+        demo_asset_ids = sorted(await demo_scope.get_demo_asset_id_set([site_id]))
+        match["asset_id"] = {"$in": demo_asset_ids}
     pipeline = [
-        {"$match": {"site_id": site_id}},
+        {"$match": match},
         {"$group": {
             "_id": "$timestamp",
             "power_kW": {"$sum": "$power_kW"},
@@ -358,6 +416,21 @@ async def list_alarms(
         if not site_ids:
             return {"total": 0, "items": [], "root_causes": []}
         q["site_id"] = {"$in": site_ids}
+
+    demo_active = await demo_scope.is_demo_scope_active(user)
+    if demo_active:
+        demo_site_ids = await demo_scope.get_demo_site_id_set()
+        if isinstance(q.get("site_id"), dict):
+            q["site_id"]["$in"] = sorted(set(q["site_id"]["$in"]) & demo_site_ids)
+        elif "site_id" in q:
+            q["site_id"] = q["site_id"] if q["site_id"] in demo_site_ids else "__none__"
+        else:
+            q["site_id"] = {"$in": sorted(demo_site_ids)}
+        demo_asset_ids = sorted(await demo_scope.get_demo_asset_id_set(
+            q["site_id"]["$in"] if isinstance(q.get("site_id"), dict) else None
+        ))
+        q["asset_id"] = {"$in": demo_asset_ids}
+
     total = await db.fleet_alarms.count_documents(q)
     items = await db.fleet_alarms.find(q, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
 
@@ -392,6 +465,21 @@ async def list_work_orders(
         if not site_ids:
             return {"total": 0, "items": [], "status_breakdown": []}
         q["site_id"] = {"$in": site_ids}
+
+    demo_active = await demo_scope.is_demo_scope_active(user)
+    if demo_active:
+        demo_site_ids = await demo_scope.get_demo_site_id_set()
+        if isinstance(q.get("site_id"), dict):
+            q["site_id"]["$in"] = sorted(set(q["site_id"]["$in"]) & demo_site_ids)
+        elif "site_id" in q:
+            q["site_id"] = q["site_id"] if q["site_id"] in demo_site_ids else "__none__"
+        else:
+            q["site_id"] = {"$in": sorted(demo_site_ids)}
+        demo_asset_ids = sorted(await demo_scope.get_demo_asset_id_set(
+            q["site_id"]["$in"] if isinstance(q.get("site_id"), dict) else None
+        ))
+        q["asset_id"] = {"$in": demo_asset_ids}
+
     total = await db.fleet_work_orders.count_documents(q)
     items = await db.fleet_work_orders.find(q, {"_id": 0}).sort("work_order_id", -1).limit(limit).to_list(limit)
 
@@ -430,6 +518,9 @@ async def states_breakdown(
     match: Dict[str, Any] = {}
     if category:
         match["site_type"] = category
+    if await demo_scope.is_demo_scope_active(user):
+        demo_ids = await demo_scope.get_demo_site_id_set(category)
+        match["site_id"] = {"$in": sorted(demo_ids)}
     pipeline = [
         {"$match": match},
         {"$group": {

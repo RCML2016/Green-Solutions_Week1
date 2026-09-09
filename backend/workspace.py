@@ -68,12 +68,19 @@ async def require_external_side_effects(_user: dict = Depends(get_current_user))
 
 @router.get("")
 async def read_workspace(_user: dict = Depends(get_current_user)):
+    import demo_scope
     config = await get_workspace_config()
-    return {**config, "scenarios": SCENARIOS}
+    return {
+        **config,
+        "scenarios": SCENARIOS,
+        "demo_mode_enabled": demo_scope.DEMO_MODE_ENABLED,
+        "demo_asset_limit_per_category": demo_scope.DEMO_ASSET_LIMIT_PER_CATEGORY,
+    }
 
 
 @router.patch("")
 async def update_workspace(payload: WorkspaceConfigUpdate, admin: dict = Depends(require_admin)):
+    import demo_scope
     unknown = sorted(set(payload.features) - VALID_FEATURES)
     if unknown:
         raise HTTPException(status_code=422, detail=f"Unknown feature flags: {', '.join(unknown)}")
@@ -91,12 +98,14 @@ async def update_workspace(payload: WorkspaceConfigUpdate, admin: dict = Depends
     }
     await db.workspace_config.update_one({"id": CONFIG_ID}, {"$set": doc}, upsert=True)
     await db.workspace_audit.insert_one({"action": "config_updated", **doc})
+    demo_scope.bump_demo_cache()
     return {"id": CONFIG_ID, **doc, "scenarios": SCENARIOS}
 
 
 @router.post("/reset-demo")
 async def reset_demo(admin: dict = Depends(require_admin)):
     """Restore the shipped workbook and clear transient demo activity."""
+    import demo_scope
     config = await get_workspace_config()
     if config["mode"] != "demo":
         raise HTTPException(status_code=409, detail="Demo reset is available only in DEMO mode.")
@@ -115,4 +124,5 @@ async def reset_demo(admin: dict = Depends(require_admin)):
             {"$set": {"scenario": "portfolio_overview", "last_reset_at": now, "last_reset_by": admin["id"]}},
         )
         await db.workspace_audit.insert_one({"action": "demo_reset", "at": now, "by": admin["id"], "counts": counts})
+        demo_scope.bump_demo_cache()
         return {"ok": True, "reset_at": now, "counts": counts}

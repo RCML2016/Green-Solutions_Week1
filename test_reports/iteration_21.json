@@ -1,0 +1,25 @@
+{
+  "summary": "Verified new Demo/Pilot Asset Display Limit feature for AssetNova. 14/14 backend pytest tests pass (workspace demo fields, admin exemption, non-admin caps per category & per asset-type, deterministic selection, states/alarms/work-orders scoping, featured-toggle admin-only + effect visible in demo scope, client portfolio intersecting demo, workspace mode switch restoring full data). Frontend UI verified: workspace banner shows 'Showing 5 representative assets per category for this demo.' for non-admin (assetmgr) with data-testid='demo-asset-limit-note' present; admin sees NO such note. Fleet Admin page shows 380 star-toggle buttons (data-testid='fleet-admin-featured-btn') on Sites tab for admin, and 0 for non-admin (correctly admin-gated). Assetmgr overview shows 40 sites/351 assets (demo-scoped) while admin sees 380 sites/5473 assets. Workspace mode switch to production restored full data for non-admin, then reverted to demo. All test-mutated state restored (featured toggles reverted, workspace mode left in demo).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_demo_scope.py",
+    "/app/test_reports/pytest/demo_scope.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "demo_scope._cache is a process-local module dict — if backend is scaled to multiple workers, cache invalidation via bump_demo_cache() will only affect the worker that received the write, so other workers may serve stale featured toggles for one request cycle. Not a bug now (single worker), but worth documenting.",
+    "get_demo_asset_id_set caches by tuple(sorted(site_ids)) but only stores ONE cached value at a time — repeated calls alternating between different site_id subsets will thrash the cache. Fine for current usage."
+  ],
+  "updated_files": ["/app/backend/tests/test_demo_scope.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@assetnova.com/Admin@123, assetmgr@assetnova.com/Asset@123, client@assetnova.com/Client@123",
+  "seed_data_creation": "None; only transient toggles that were reverted, and a workspace mode switch that was reverted back to 'demo'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New pytest suite /app/backend/tests/test_demo_scope.py covers the entire demo-scope feature (14 tests). Uses PATCH /workspace with required fields {mode, scenario, features}. Client portfolio path is /api/client/portfolio (not /api/rbac/...). Fleet-admin has no GET /sites list endpoint — use /api/fleet/sites (admin unrestricted). Workspace is expected to be in 'demo' mode by default; do not leave it in production."
+}
