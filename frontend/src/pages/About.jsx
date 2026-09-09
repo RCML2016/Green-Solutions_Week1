@@ -14,12 +14,12 @@ export default function About() {
 
         <div className="grid md:grid-cols-3 gap-6 mt-14">
           {[
-            { k: "DATA", v: "Every signal matters." },
-            { k: "AI", v: "Every pattern can teach us." },
-            { k: "ACTION", v: "Every insight should move the operation." },
+            { k: "Asset Data", v: "Every signal matters." },
+            { k: "Artificial Intelligence", v: "Every pattern can teach us." },
+            { k: "Next Best Recommended Action", v: "Every insight should move the operation." },
           ].map((c) => (
             <div key={c.k} className="gs-card-accent p-8">
-              <div className="font-display text-3xl text-[color:var(--brand-3)]">{c.k}</div>
+              <div className="font-display text-2xl leading-tight text-[color:var(--brand-3)]">{c.k}</div>
               <p className="text-[color:var(--ink-2)] text-sm mt-4">{c.v}</p>
             </div>
           ))}

@@ -21,6 +21,7 @@ and audit logging.
   - Routes added in `App.js`: `/privacy-policy`, `/terms-of-use`, `/trademark-notice`.
   - Tested via testing_agent: 100% pass, all data-testids verified, no ® symbol found, mobile responsive confirmed.
 - Copy refresh (2026-09-09): Landing.jsx + HowItWorks.jsx "See/Understand/Act" framework renamed to "Visibility/Intelligence/Action" (eyebrow labels, card/step titles). Hero eyebrow changed from all-caps "AI-POWERED SUSTAINABILITY INTELLIGENCE" to title-case "AI Powered Sustainability Intelligence" (inline style override on `.eyebrow`'s forced uppercase).
+- About/Contact/Footer copy update (2026-09-09): About.jsx triplet cards renamed DATA→"Asset Data", AI→"Artificial Intelligence", ACTION→"Next Best Recommended Action" (font size reduced to text-2xl to fit longer label). Contact.jsx email changed hello@assetnova.com → Info@assetnova.com. Layout.jsx footer version badge ("v1.0 · READY") moved from its own separate line into an inline pill next to the nav links (with pulse-dot), fixing the disjointed look reported by user; footer now stacks centered on mobile, row layout on desktop.
 
 ## Known Non-blocking Items
 None currently outstanding.
