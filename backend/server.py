@@ -262,14 +262,6 @@ async def startup():
     except Exception as e:  # noqa: BLE001
         logging.warning("[STARTUP] QA artefact regeneration skipped: %s", e)
 
-    # Purge earlier test junk accounts so the Administration table stays clean.
-    # Keep: the 5 demo accounts + the seeded admin + anything with a real domain.
-    junk_domains = ["@test.com", "@example.com", "@t.com"]
-    junk_query = {"$or": [{"email": {"$regex": f".*{d}$", "$options": "i"}} for d in junk_domains]}
-    purged = await db.users.delete_many(junk_query)
-    if purged.deleted_count:
-        logging.info("[STARTUP] Purged %d legacy test accounts", purged.deleted_count)
-
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
