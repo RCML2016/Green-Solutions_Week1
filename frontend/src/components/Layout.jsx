@@ -6,6 +6,12 @@ import WorkspaceBanner from "./WorkspaceBanner";
 import { useWorkspace } from "@/context/WorkspaceContext";
 import DemoScenarioGuide from "./DemoScenarioGuide";
 
+const MODE_PILL = {
+  demo: "bg-amber-50 text-amber-900 border-amber-200",
+  pilot: "bg-blue-50 text-blue-900 border-blue-200",
+  production: "bg-emerald-50 text-emerald-900 border-emerald-200",
+};
+
 export default function Layout() {
   const { user } = useAuth();
   const { workspace } = useWorkspace();
@@ -44,9 +50,15 @@ export default function Layout() {
               </nav>
               <span
                 data-testid="footer-version"
-                className="inline-flex items-center gap-1.5 font-mono text-[10px] border border-[color:var(--line)] bg-white rounded-full px-2.5 py-1 whitespace-nowrap"
+                className={`inline-flex items-center gap-1.5 font-mono text-[10px] border rounded-full px-2.5 py-1 whitespace-nowrap transition-colors ${
+                  MODE_PILL[workspace?.mode] || "border-[color:var(--line)] bg-white text-[color:var(--ink-3)]"
+                }`}
               >
-                <span className="pulse-dot" /> v1.0 · {workspace?.mode?.toUpperCase() || "READY"}
+                <span
+                  className="w-1.5 h-1.5 rounded-full pulse-dot"
+                  style={{ background: workspace?.mode === "demo" ? "#f59e0b" : workspace?.mode === "pilot" ? "#3b82f6" : workspace?.mode === "production" ? "#10b981" : undefined }}
+                />
+                v1.0 · {workspace?.mode?.toUpperCase() || "READY"}
               </span>
             </div>
           </div>
