@@ -53,6 +53,11 @@ async def healthz():
     return {"ok": True, "fleet_sites": fleet_sites, "time": datetime.now(timezone.utc).isoformat()}
 
 
+@app.get("/health")
+async def health_root():
+    return {"ok": True}
+
+
 @api_router.get("/download/source")
 async def download_source(_admin: dict = Depends(require_admin)):
     """Return the latest packaged source zip. Admin-only."""
@@ -189,20 +194,6 @@ async def startup():
     migrated = await db.users.update_many({"role": "user"}, {"$set": {"role": "executive"}})
     if migrated.modified_count:
         logging.info("[STARTUP] Migrated %d legacy 'user' role -> 'executive'", migrated.modified_count)
-
-    # Rebrand migration: rename any @greensolutions.ai accounts to @assetnova.com
-    # (idempotent — only touches rows that still have the old domain)
-    legacy_users = await db.users.find({"email": {"$regex": "@greensolutions\\.ai$", "$options": "i"}}).to_list(50)
-    for u in legacy_users:
-        new_email = u["email"].lower().replace("@greensolutions.ai", "@assetnova.com")
-        # If the target email doesn't already exist, rename. Otherwise drop the stale row.
-        clash = await db.users.find_one({"email": new_email})
-        if clash and clash["id"] != u["id"]:
-            await db.users.delete_one({"id": u["id"]})
-        else:
-            await db.users.update_one({"id": u["id"]}, {"$set": {"email": new_email}})
-    if legacy_users:
-        logging.info("[STARTUP] Rebranded %d legacy @greensolutions.ai accounts -> @assetnova.com", len(legacy_users))
 
     # Seed demo accounts, one per MVP role — idempotent
     demo_accounts = [

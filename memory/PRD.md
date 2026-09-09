@@ -13,6 +13,7 @@ and audit logging.
 
 ## Status (as of 2026-09-09)
 - `integration/fleet-admin-demo-hardening` branch: stable, passed backend/frontend/deployment checks. Awaiting manual "Save to GitHub" merge to `main` by user.
+- Deployment health check re-run (2026-09-09): removed a legacy one-time "rebrand migration" from `server.py` startup (flagged as automatic destructive-delete risk by deployment_agent), added top-level `/health` route. `.gitignore` confirmed correctly excludes `memory/test_credentials.md`. **Deployment: READY, no blockers.**
 - Custom domain (assetnovaenergy.com via Cloudflare) troubleshooting guidance given to user (remove stale A records, re-link via Entri).
 - Footer & legal pages implemented and tested (2026-09-09):
   - `Layout.jsx` footer replaced: dynamic copyright (`© {year} AssetNova Energy. All rights reserved.`), "AssetNova™ is a product of AssetNova Energy™" (TM only, no ®), links to Privacy Policy / Terms of Use / Trademark Notice / Contact. Appears on ALL routes (public + authenticated).
