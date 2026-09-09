@@ -25,16 +25,16 @@ export default function Layout() {
         <main className="min-h-[calc(100vh-72px)]">
           <Outlet />
         </main>
-        <footer data-testid="site-footer" className="border-t border-[color:var(--line)] py-8 px-8 lg:px-14 text-xs text-[color:var(--ink-3)]">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
-            <div className="font-mono leading-relaxed text-center md:text-left" data-testid="footer-copyright">
+        <footer data-testid="site-footer" className="border-t border-[color:var(--line)] py-6 px-8 lg:px-14 text-[color:var(--ink-3)]">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="text-[11px] leading-relaxed text-center md:text-left" data-testid="footer-copyright">
               © {new Date().getFullYear()} AssetNova Energy. All rights reserved.{" "}
-              <span className="block md:inline md:ml-2 mt-0.5 md:mt-0">
+              <span className="block md:inline md:ml-1.5 mt-0.5 md:mt-0 opacity-80">
                 AssetNova™ is a product of AssetNova Energy™
               </span>
             </div>
-            <div className="flex flex-wrap items-center justify-center md:justify-end gap-4 md:gap-5">
-              <nav className="flex flex-wrap items-center justify-center gap-4 md:gap-5 font-mono" aria-label="Legal">
+            <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 md:gap-4">
+              <nav className="flex flex-wrap items-center justify-center gap-3 md:gap-4 text-[11px]" aria-label="Legal">
                 <Link to="/privacy-policy" data-testid="footer-link-privacy" className="hover:text-[color:var(--brand-3)] transition">
                   Privacy Policy
                 </Link>
@@ -50,7 +50,7 @@ export default function Layout() {
               </nav>
               <span
                 data-testid="footer-version"
-                className={`inline-flex items-center gap-1.5 font-mono text-[10px] border rounded-full px-2.5 py-1 whitespace-nowrap transition-colors ${
+                className={`inline-flex items-center gap-1.5 font-mono text-[9px] border rounded-full px-2 py-0.5 whitespace-nowrap transition-colors ${
                   MODE_PILL[workspace?.mode] || "border-[color:var(--line)] bg-white text-[color:var(--ink-3)]"
                 }`}
               >
@@ -58,7 +58,7 @@ export default function Layout() {
                   className="w-1.5 h-1.5 rounded-full pulse-dot"
                   style={{ background: workspace?.mode === "demo" ? "#f59e0b" : workspace?.mode === "pilot" ? "#3b82f6" : workspace?.mode === "production" ? "#10b981" : undefined }}
                 />
-                v1.0 · {workspace?.mode?.toUpperCase() || "READY"}
+                v1.0 · {workspace?.mode ? workspace.mode.charAt(0).toUpperCase() + workspace.mode.slice(1) : "Ready"}
               </span>
             </div>
           </div>
