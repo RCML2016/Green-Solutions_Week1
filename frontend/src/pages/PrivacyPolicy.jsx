@@ -28,10 +28,6 @@ export default function PrivacyPolicy() {
       t: "Changes to This Policy",
       d: "We may update this Privacy Policy from time to time. Continued use of AssetNova™ after changes are posted constitutes acceptance of the updated policy.",
     },
-    {
-      t: "Contact",
-      d: "Questions about this Privacy Policy can be directed to info@assetnovaenergy.com.",
-    },
   ];
 
   return (
@@ -52,6 +48,19 @@ export default function PrivacyPolicy() {
               <p className="mt-2 text-[15px] leading-relaxed text-[color:var(--ink-2)]">{s.d}</p>
             </div>
           ))}
+          <div data-testid="privacy-contact-section">
+            <h2 className="font-display text-lg text-[color:var(--ink)]">Contact</h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-[color:var(--ink-2)]">
+              Questions about this Privacy Policy can be directed to:
+            </p>
+            <div className="mt-3 text-[15px] text-[color:var(--ink-2)] leading-relaxed">
+              <div>AssetNova</div>
+              <div>Dallas, Texas, USA</div>
+              <a href="mailto:info@assetnova.com" data-testid="privacy-contact-email" className="text-[color:var(--ink)] hover:text-[color:var(--brand-3)] font-medium">
+                info@assetnova.com
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>

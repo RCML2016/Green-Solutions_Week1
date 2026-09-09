@@ -28,10 +28,6 @@ export default function TermsOfUse() {
       t: "Changes to These Terms",
       d: "We may revise these Terms of Use from time to time. Continued use of the platform after changes are posted constitutes acceptance of the revised terms.",
     },
-    {
-      t: "Contact",
-      d: "Questions about these Terms of Use can be directed to info@assetnovaenergy.com.",
-    },
   ];
 
   return (
@@ -52,6 +48,19 @@ export default function TermsOfUse() {
               <p className="mt-2 text-[15px] leading-relaxed text-[color:var(--ink-2)]">{s.d}</p>
             </div>
           ))}
+          <div data-testid="terms-contact-section">
+            <h2 className="font-display text-lg text-[color:var(--ink)]">Contact</h2>
+            <p className="mt-2 text-[15px] leading-relaxed text-[color:var(--ink-2)]">
+              Questions about these Terms of Use can be directed to:
+            </p>
+            <div className="mt-3 text-[15px] text-[color:var(--ink-2)] leading-relaxed">
+              <div>AssetNova</div>
+              <div>Dallas, Texas, USA</div>
+              <a href="mailto:info@assetnova.com" data-testid="terms-contact-email" className="text-[color:var(--ink)] hover:text-[color:var(--brand-3)] font-medium">
+                info@assetnova.com
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>

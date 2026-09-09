@@ -1,4 +1,5 @@
 import { Outlet, Link } from "react-router-dom";
+import { MapPin, Mail } from "lucide-react";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import { useAuth } from "@/context/AuthContext";
@@ -26,12 +27,25 @@ export default function Layout() {
           <Outlet />
         </main>
         <footer data-testid="site-footer" className="border-t border-[color:var(--line)] py-6 px-8 lg:px-14 text-[color:var(--ink-3)]">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div className="text-[11px] leading-relaxed text-center md:text-left" data-testid="footer-copyright">
-              © {new Date().getFullYear()} AssetNova Energy. All rights reserved.{" "}
-              <span className="block md:inline md:ml-1.5 mt-0.5 md:mt-0 opacity-80">
-                AssetNova™ is a product of AssetNova Energy™
-              </span>
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div className="text-[11px] leading-relaxed text-center md:text-left space-y-1.5" data-testid="footer-contact-block">
+              <div className="font-medium text-[color:var(--ink)]" data-testid="footer-company-name">AssetNova</div>
+              <div className="flex items-center justify-center md:justify-start gap-1.5 opacity-80" data-testid="footer-location">
+                <MapPin size={11} /> Dallas, Texas, USA
+              </div>
+              <a
+                href="mailto:info@assetnova.com"
+                data-testid="footer-email-link"
+                className="inline-flex items-center justify-center md:justify-start gap-1.5 hover:text-[color:var(--brand-3)] transition"
+              >
+                <Mail size={11} /> info@assetnova.com
+              </a>
+              <div data-testid="footer-copyright">
+                © {new Date().getFullYear()} AssetNova Energy. All rights reserved.{" "}
+                <span className="block md:inline md:ml-1.5 mt-0.5 md:mt-0 opacity-80">
+                  AssetNova™ is a product of AssetNova Energy™
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 md:gap-4">
               <nav className="flex flex-wrap items-center justify-center gap-3 md:gap-4 text-[11px]" aria-label="Legal">
