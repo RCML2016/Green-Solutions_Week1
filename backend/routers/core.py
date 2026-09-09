@@ -9,6 +9,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
+import asyncio
+import resend
 from fastapi import APIRouter, HTTPException, Depends
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
@@ -28,6 +30,8 @@ from rbac import role_required
 
 router = APIRouter(tags=["core"])
 log = logging.getLogger("assetnova")
+resend.api_key = os.environ.get("RESEND_API_KEY")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
 
 
 async def _notify_lead(name: str, email: str, message: str) -> None:
@@ -61,6 +65,66 @@ async def _notify_lead(name: str, email: str, message: str) -> None:
         log.warning("Lead-notify failed: %s", e)
 
 
+def _confirmation_html(name: str) -> str:
+    first_name = (name or "there").split(" ")[0]
+    return f"""
+    <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f4f7f5; padding:32px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e4e9e6;">
+        <tr>
+          <td style="background:#0b3b2e; padding:28px 32px;">
+            <span style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:-0.02em;">Asset<span style="color:#34d399;">Nova</span></span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <h1 style="margin:0 0 16px; font-size:20px; color:#0b3b2e;">Thanks, {first_name} — we've got your message.</h1>
+            <p style="margin:0 0 16px; font-size:14px; line-height:1.6; color:#3f4b46;">
+              We've received your AssetNova demo/pilot request and our team will review your renewable-energy
+              operations and asset-management needs shortly. A member of our team will reach out within 1–2
+              business days.
+            </p>
+            <p style="margin:0 0 24px; font-size:14px; line-height:1.6; color:#3f4b46;">
+              In the meantime, if anything is urgent, just reply directly to this email.
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:13px; color:#3f4b46; line-height:1.7;">
+              <tr><td style="font-weight:600; color:#0b3b2e;">AssetNova</td></tr>
+              <tr><td>Dallas, Texas, USA</td></tr>
+              <tr><td><a href="mailto:info@assetnova.com" style="color:#0b7a5b; text-decoration:none;">info@assetnova.com</a></td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 32px; background:#f4f7f5; font-size:11px; color:#8a9690;">
+            © {datetime.now(timezone.utc).year} AssetNova Energy. All rights reserved.
+          </td>
+        </tr>
+      </table>
+    </div>
+    """
+
+
+async def _send_confirmation_email(name: str, email: str) -> None:
+    """Send a branded auto-reply to the person who submitted the contact form.
+    Suppressed outside PRODUCTION mode, same safety rule as _notify_lead."""
+    from workspace import get_workspace_config
+    workspace = await get_workspace_config()
+    if not workspace["external_side_effects_enabled"]:
+        log.info("Confirmation email suppressed in %s mode", workspace["mode"])
+        return
+    if not resend.api_key or not SENDER_EMAIL:
+        return
+    params = {
+        "from": f"AssetNova <{SENDER_EMAIL}>",
+        "to": [email],
+        "subject": "We've received your AssetNova demo request",
+        "html": _confirmation_html(name),
+    }
+    try:
+        await asyncio.to_thread(resend.Emails.send, params)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Confirmation email failed: %s", e)
+
+
 # ---------------- Contact ----------------
 @router.post("/contact")
 async def contact(payload: ContactRequest):
@@ -73,7 +137,9 @@ async def contact(payload: ContactRequest):
     }
     await db.contact_messages.insert_one(doc)
     await _notify_lead(payload.name, payload.email, payload.message)
+    await _send_confirmation_email(payload.name, payload.email)
     return {"ok": True, "message": "Thanks — we'll be in touch soon."}
+
 
 
 @router.get("/admin/leads")
