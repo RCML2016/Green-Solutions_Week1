@@ -20,6 +20,7 @@ and audit logging.
   - New pages: `pages/TrademarkNotice.jsx` (verbatim legal text + mailto:info@assetnovaenergy.com), `pages/PrivacyPolicy.jsx`, `pages/TermsOfUse.jsx` (generic placeholder boilerplate — user approved, real legal text not yet provided).
   - Routes added in `App.js`: `/privacy-policy`, `/terms-of-use`, `/trademark-notice`.
   - Tested via testing_agent: 100% pass, all data-testids verified, no ® symbol found, mobile responsive confirmed.
+- Copy refresh (2026-09-09): Landing.jsx + HowItWorks.jsx "See/Understand/Act" framework renamed to "Visibility/Intelligence/Action" (eyebrow labels, card/step titles). Hero eyebrow changed from all-caps "AI-POWERED SUSTAINABILITY INTELLIGENCE" to title-case "AI Powered Sustainability Intelligence" (inline style override on `.eyebrow`'s forced uppercase).
 
 ## Known Non-blocking Items
 None currently outstanding.

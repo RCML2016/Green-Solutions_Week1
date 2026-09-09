@@ -31,8 +31,8 @@ export default function Landing() {
         <div className="relative max-w-[1200px] mx-auto px-6 lg:px-10 grid lg:grid-cols-2 gap-16 items-center">
           <div>
             <Reveal delay={0}>
-              <div className="eyebrow flex items-center gap-2">
-                <span className="pulse-dot" /> AI-POWERED SUSTAINABILITY INTELLIGENCE
+              <div className="eyebrow flex items-center gap-2" style={{ textTransform: "none" }}>
+                <span className="pulse-dot" /> AI Powered Sustainability Intelligence
               </div>
             </Reveal>
             <Reveal delay={120}>
