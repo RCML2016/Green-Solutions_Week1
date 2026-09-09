@@ -29,6 +29,7 @@ import ExecutiveOverview from "@/pages/ExecutiveOverview";
 import OperationsCenter from "@/pages/OperationsCenter";
 import MyWork from "@/pages/MyWork";
 import Administration from "@/pages/Administration";
+import DemoLeads from "@/pages/DemoLeads";
 import QaTracker from "@/pages/QaTracker";
 import PerformanceAnalytics from "@/pages/PerformanceAnalytics";
 import ClientPortal from "@/pages/ClientPortal";
@@ -110,6 +111,9 @@ function App() {
             } />
             <Route path="/admin" element={
               <Protected allow={["admin"]}><Administration /></Protected>
+            } />
+            <Route path="/demo-leads" element={
+              <Protected allow={["admin"]}><DemoLeads /></Protected>
             } />
             <Route path="/fleet-admin" element={
               <Protected allow={["admin", "asset_manager"]}><FleetAdmin /></Protected>

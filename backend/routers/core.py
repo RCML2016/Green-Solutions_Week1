@@ -17,6 +17,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, Strea
 from deps import db, get_current_user, require_admin, hash_password
 from models import (
     ContactRequest,
+    LeadStatusUpdate,
     InviteRequest,
     ScheduleRequest,
     PortfolioCreate,
@@ -133,6 +134,7 @@ async def contact(payload: ContactRequest):
         "name": payload.name,
         "email": payload.email.lower(),
         "message": payload.message,
+        "status": "new",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.contact_messages.insert_one(doc)
@@ -141,14 +143,24 @@ async def contact(payload: ContactRequest):
     return {"ok": True, "message": "Thanks — we'll be in touch soon."}
 
 
-
 @router.get("/admin/leads")
-async def list_leads(limit: int = 50, _user: dict = Depends(require_admin)):
+async def list_leads(limit: int = 50, status: Optional[str] = None, _user: dict = Depends(require_admin)):
     """Admin view of all contact_messages — the always-on lead inbox that
     works regardless of whether the FormSubmit notification succeeded."""
     limit = max(1, min(limit, 200))
-    docs = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    q: dict = {"status": status} if status else {}
+    docs = await db.contact_messages.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     return {"leads": docs, "count": len(docs)}
+
+
+@router.patch("/admin/leads/{lead_id}")
+async def update_lead_status(lead_id: str, payload: LeadStatusUpdate, _user: dict = Depends(require_admin)):
+    """Mark a demo lead as new / contacted / closed so the team can triage without email."""
+    res = await db.contact_messages.update_one({"id": lead_id}, {"$set": {"status": payload.status}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    doc = await db.contact_messages.find_one({"id": lead_id}, {"_id": 0})
+    return doc
 
 
 # ---------------- Legacy portfolio metrics (kept for backward compat) ----------------

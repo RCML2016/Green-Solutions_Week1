@@ -173,7 +173,12 @@ export default function Administration() {
               <div className="text-sm text-[color:var(--ink)] mt-0.5">{leads.length} recent submissions · newest first</div>
             </div>
           </div>
-          <div className="text-[10px] font-mono text-[color:var(--ink-3)]">STORED IN <span className="text-[color:var(--brand-3)]">contact_messages</span></div>
+          <div className="flex items-center gap-3">
+            <div className="text-[10px] font-mono text-[color:var(--ink-3)]">STORED IN <span className="text-[color:var(--brand-3)]">contact_messages</span></div>
+            <Link to="/demo-leads" data-testid="admin-leads-manage-all-link" className="text-xs font-mono text-[color:var(--brand-3)] hover:underline whitespace-nowrap">
+              Manage all →
+            </Link>
+          </div>
         </div>
 
         {leads.length === 0 ? (

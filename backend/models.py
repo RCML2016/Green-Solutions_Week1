@@ -24,6 +24,10 @@ class ContactRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
 
 
+class LeadStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(new|contacted|closed)$")
+
+
 class ForgotRequest(BaseModel):
     email: EmailStr
 
