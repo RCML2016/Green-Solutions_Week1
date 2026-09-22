@@ -1,0 +1,10 @@
+{
+  "assets": {"SCADA_INV_01": "INV-001", "BMS_SYS_01": "BESS-001", "TRACKER_01": "TRK-001"},
+  "metrics": {
+    "PAC": ["ac_power_kw", "kW", 1.0],
+    "TEMP_INV": ["inverter_temp_c", "C", 1.0],
+    "rack.soc": ["soc_pct", "pct", 1.0],
+    "actualAngle": ["tracker_angle_deg", "deg", 1.0]
+  }
+}
+
