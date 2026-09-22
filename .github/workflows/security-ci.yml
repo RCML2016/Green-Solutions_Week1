@@ -25,7 +25,7 @@ jobs:
       - name: Install unit-test dependencies
         run: >-
           python -m pip install pytest pydantic fastapi pymongo motor bcrypt
-          PyJWT python-multipart openpyxl
+          PyJWT python-multipart openpyxl requests
       - name: Run backend unit tests
         env:
           MONGO_URL: mongodb://localhost:27017
