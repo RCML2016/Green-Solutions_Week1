@@ -1,0 +1,34 @@
+connectors:
+  solar_scada:
+    mode: opcua
+    endpoint: opc.tcp://edge-gateway:4840
+    output_topic: assetnova.canonical.solar_scada
+    poll_seconds: 1
+  inverter_tracker:
+    mode: rest
+    base_url: https://vendor.example/api
+    output_topic: assetnova.canonical.inverter_tracker
+    poll_seconds: 60
+  bess_ems_bms:
+    mode: mqtt
+    broker: mqtts://bess-gateway:8883
+    output_topic: assetnova.canonical.bess_ems_bms
+  weather:
+    mode: rest
+    output_topic: assetnova.canonical.weather
+    poll_seconds: 300
+  cmms_eam:
+    mode: webhook_and_delta
+    output_topic: assetnova.canonical.cmms_eam
+    reconciliation_cron: "0 2 * * *"
+  meters:
+    mode: sftp_csv
+    output_topic: assetnova.canonical.meters
+    poll_seconds: 900
+  technician_apps:
+    mode: webhook
+    output_topic: assetnova.canonical.technician_apps
+  enterprise:
+    mode: cdc_and_sftp
+    output_topic: assetnova.canonical.enterprise
+
