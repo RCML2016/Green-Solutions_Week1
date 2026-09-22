@@ -372,7 +372,7 @@ sequenceDiagram
 | `EMERGENT_LLM_KEY`      | backend/.env    | ✅       | Powers AI + Object Storage            |
 | `INTEGRATION_PROXY_URL` | backend/.env    | ⚠️       | Emergent internal — defaults if unset |
 | `ADMIN_EMAIL`           | backend/.env    | ⛔       | Defaults to `admin@assetnova.com` |
-| `ADMIN_PASSWORD`        | backend/.env    | ⛔       | Defaults to `Admin@123`               |
+| `ADMIN_PASSWORD`        | backend/.env    | ✅       | Required deployment secret; no default |
 | `FRONTEND_URL`          | backend/.env    | ⛔       | Used in password reset + snapshot URLs|
 | `REACT_APP_BACKEND_URL` | frontend/.env   | ✅       | Full external URL, no trailing slash  |
 

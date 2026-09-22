@@ -49,9 +49,10 @@ JWT_SECRET=change-me-to-a-long-random-string
 EMERGENT_LLM_KEY=sk-emergent-xxxxxxxx        # Powers Claude + Object Storage
 INTEGRATION_PROXY_URL=https://integrations.emergentagent.com   # optional
 FRONTEND_URL=http://localhost:3000
-ADMIN_EMAIL=admin@assetnova.com          # optional, default value
-ADMIN_PASSWORD=Admin@123                     # optional, default value
+ADMIN_EMAIL=admin@assetnova.com
+ADMIN_PASSWORD=<set-a-unique-secret-in-your-hosting-platform>
 WORKSPACE_MODE=demo                           # demo | pilot | production
+CORS_ORIGINS=http://localhost:3000            # comma-separated, never use *
 ```
 
 > **Where do I get an `EMERGENT_LLM_KEY`?** Sign in to the Emergent platform and
@@ -67,20 +68,22 @@ If deploying, set this to the public URL of your backend (no trailing slash).
 
 ---
 
-## Demo Accounts (Auto-Seeded)
+## Demo Accounts (Opt-In)
 
 | Email                              | Password         | Role                    | Landing              |
 |-----------------------------------|------------------|-------------------------|----------------------|
-| admin@assetnova.com            | Admin@123        | admin                   | /admin               |
-| executive@assetnova.com        | Executive@123    | executive               | /overview            |
-| assetmgr@assetnova.com         | Asset@123        | asset_manager           | /dashboard           |
-| ops@assetnova.com              | Ops@123          | om_manager              | /operations          |
-| tech@assetnova.com             | Tech@123         | technician              | /my-work             |
-| perf@assetnova.com             | Perf@123         | performance_engineer    | /performance         |
-| client@assetnova.com           | Client@123       | client_viewer           | /client-portal       |
+| admin@assetnova.com            | deployment secret | admin                   | /admin               |
+| executive@assetnova.com        | deployment secret | executive               | /overview            |
+| assetmgr@assetnova.com         | deployment secret | asset_manager           | /dashboard           |
+| ops@assetnova.com              | deployment secret | om_manager              | /operations          |
+| tech@assetnova.com             | deployment secret | technician              | /my-work             |
+| perf@assetnova.com             | deployment secret | performance_engineer    | /performance         |
+| client@assetnova.com           | deployment secret | client_viewer           | /client-portal       |
 
-The `client_viewer` demo has a scoped default of 20 Utility-Scale Solar sites
-so the Client Portal renders straight away.
+Passwords are never stored in the repository. Configure them through the
+`ADMIN_PASSWORD` and `DEMO_*_PASSWORD` deployment secrets and share them only
+through an approved private channel. The application performs a one-time
+rotation of credentials distributed by older builds.
 
 ---
 

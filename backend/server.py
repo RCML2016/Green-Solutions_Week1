@@ -13,13 +13,14 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import uuid
 import logging
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from starlette.middleware.cors import CORSMiddleware
 
-from deps import db, close_db_client, hash_password, verify_password, require_admin
+from deps import db, close_db_client, hash_password, require_admin
 from seed_dataset import seed_if_empty
 import storage
 from routers.auth import router as auth_router
@@ -28,11 +29,8 @@ from routers.core import router as core_router
 from routers.fleet import router as fleet_router
 from routers.rbac_ext import router as rbac_router, team_router, client_router, evidence_router
 from routers.qa import router as qa_router
-<<<<<<< HEAD
 from routers.fleet_admin import router as fleet_admin_router
-=======
 from workspace import router as workspace_router
->>>>>>> origin/feature/demo-hardening
 
 
 logging.basicConfig(
@@ -117,20 +115,28 @@ api_router.include_router(team_router)
 api_router.include_router(client_router)
 api_router.include_router(evidence_router)
 api_router.include_router(qa_router)
-<<<<<<< HEAD
 api_router.include_router(fleet_admin_router)
-=======
 api_router.include_router(workspace_router)
->>>>>>> origin/feature/demo-hardening
 
 app.include_router(api_router)
 
+cors_origins = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip() and origin.strip() != "*"
+]
+if not cors_origins:
+    raise RuntimeError("CORS_ORIGINS must contain at least one explicit origin; wildcard CORS is disabled")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=False,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 
@@ -151,20 +157,18 @@ async def startup():
     await db.branding.create_index("user_id", unique=True)
     await db.actions.create_index([("user_id", 1), ("created_at", -1)])
     await db.login_attempts.create_index("identifier")
-<<<<<<< HEAD
     await db.fleet_sites.create_index("site_id", unique=True)
     await db.fleet_assets.create_index("asset_id", unique=True)
     await db.fleet_audit_log.create_index("timestamp")
-=======
     await db.workspace_config.create_index("id", unique=True)
     await db.workspace_audit.create_index("at")
->>>>>>> origin/feature/demo-hardening
 
-    # Seed admin
+    # Seed admin only when a deployment secret is explicitly configured.
+    # Existing accounts are never reset to a known password during startup.
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@assetnova.com").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "").strip()
     existing = await db.users.find_one({"email": admin_email})
-    if not existing:
+    if not existing and admin_password:
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": admin_email,
@@ -174,10 +178,10 @@ async def startup():
             "roles": ["admin"],
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+    elif not existing:
+        logging.warning("[SECURITY] ADMIN_PASSWORD is not set; no administrator account was seeded")
     else:
         updates = {}
-        if not verify_password(admin_password, existing["password_hash"]):
-            updates["password_hash"] = hash_password(admin_password)
         # Ensure admin is always in the roles array so they can never be self-locked
         # out of the super-role by /rbac/switch
         current_roles = existing.get("roles") or []
@@ -213,32 +217,61 @@ async def startup():
     if legacy_users:
         logging.info("[STARTUP] Rebranded %d legacy @greensolutions.ai accounts -> @assetnova.com", len(legacy_users))
 
-    # Seed demo accounts, one per MVP role — idempotent
+    # Demo accounts are opt-in and passwords must be supplied as secrets.
+    # Published legacy passwords are invalidated on startup.
     demo_accounts = [
-        {"email": "executive@assetnova.com",    "name": "Ellie Executive",       "role": "executive",            "password": "Executive@123"},
-        {"email": "assetmgr@assetnova.com",     "name": "Alex Asset Mgr",        "role": "asset_manager",        "password": "Asset@123"},
-        {"email": "ops@assetnova.com",          "name": "Omar O&M Mgr",          "role": "om_manager",           "password": "Ops@123"},
-        {"email": "tech@assetnova.com",         "name": "Tara Technician",       "role": "technician",           "password": "Tech@123"},
-        {"email": "perf@assetnova.com",         "name": "Pat Performance Eng",   "role": "performance_engineer", "password": "Perf@123"},
-        {"email": "client@assetnova.com",       "name": "Chris Client Viewer",   "role": "client_viewer",        "password": "Client@123"},
+        {"email": "executive@assetnova.com", "name": "Ellie Executive", "role": "executive", "env": "DEMO_EXECUTIVE_PASSWORD"},
+        {"email": "assetmgr@assetnova.com", "name": "Alex Asset Mgr", "role": "asset_manager", "env": "DEMO_ASSET_MANAGER_PASSWORD"},
+        {"email": "ops@assetnova.com", "name": "Omar O&M Mgr", "role": "om_manager", "env": "DEMO_OM_MANAGER_PASSWORD"},
+        {"email": "tech@assetnova.com", "name": "Tara Technician", "role": "technician", "env": "DEMO_TECHNICIAN_PASSWORD"},
+        {"email": "perf@assetnova.com", "name": "Pat Performance Eng", "role": "performance_engineer", "env": "DEMO_PERFORMANCE_PASSWORD"},
+        {"email": "client@assetnova.com", "name": "Chris Client Viewer", "role": "client_viewer", "env": "DEMO_CLIENT_VIEWER_PASSWORD"},
     ]
     for acc in demo_accounts:
+        configured_password = os.environ.get(acc["env"], "").strip()
         exists = await db.users.find_one({"email": acc["email"]})
-        if not exists:
+        if not exists and configured_password:
             await db.users.insert_one({
                 "id": str(uuid.uuid4()),
                 "email": acc["email"],
-                "password_hash": hash_password(acc["password"]),
+                "password_hash": hash_password(configured_password),
                 "name": acc["name"],
                 "role": acc["role"],
                 "roles": [acc["role"]],
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
             logging.info("[STARTUP] Seeded demo account: %s (%s)", acc["email"], acc["role"])
-        else:
+        elif exists:
+            updates = {}
             # ensure `roles` array exists on legacy demo docs
             if "roles" not in exists:
-                await db.users.update_one({"id": exists["id"]}, {"$set": {"roles": [exists.get("role", "executive")]}})
+                updates["roles"] = [exists.get("role", "executive")]
+            if updates:
+                await db.users.update_one({"id": exists["id"]}, {"$set": updates})
+
+    # One-time rotation invalidates every credential that was historically
+    # distributed with the source repository. Configured secrets remain usable;
+    # accounts without a configured replacement receive an unknown random value.
+    migration_id = "2026-09-remove-published-passwords"
+    migrated_security = await db.security_migrations.find_one({"id": migration_id})
+    if not migrated_security:
+        rotations = [(admin_email, admin_password)] + [
+            (acc["email"], os.environ.get(acc["env"], "").strip())
+            for acc in demo_accounts
+        ]
+        for email, configured_password in rotations:
+            account = await db.users.find_one({"email": email})
+            if account:
+                replacement = configured_password or secrets.token_urlsafe(48)
+                await db.users.update_one(
+                    {"id": account["id"]},
+                    {"$set": {"password_hash": hash_password(replacement)}},
+                )
+        await db.security_migrations.insert_one({
+            "id": migration_id,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logging.warning("[SECURITY] Rotated all historically published account credentials")
 
     # Give the client_viewer demo a default scope of 20 solar sites
     client_user = await db.users.find_one({"email": "client@assetnova.com"})

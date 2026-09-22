@@ -10,7 +10,7 @@ Pick whichever path fits your setup.
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-# fill in EMERGENT_LLM_KEY and JWT_SECRET in backend/.env
+# fill in all required secrets in backend/.env; never commit the file
 
 docker compose up --build
 ```
@@ -54,7 +54,7 @@ yarn start
 | **MongoDB Atlas** | database       | Copy the connection string into env     |
 
 Required env vars in production:
-- `backend`: `MONGO_URL`, `DB_NAME`, `JWT_SECRET`, `EMERGENT_LLM_KEY`, `FRONTEND_URL`, `CORS_ORIGINS`
+- `backend`: `MONGO_URL`, `DB_NAME`, `JWT_SECRET`, `ADMIN_PASSWORD`, `EMERGENT_LLM_KEY`, `FRONTEND_URL`, `CORS_ORIGINS`
 - `frontend`: `REACT_APP_BACKEND_URL` (set to backend's public URL, no trailing slash)
 
 ---
@@ -95,4 +95,4 @@ else (dashboards, telemetry, RBAC, alarms, work orders) runs normally.
 
 - `GET /api/health` → `{ "status": "ok" }`
 - `GET /api/fleet/categories` → 8 category buckets from the seeded dataset
-- `POST /api/auth/login` with any demo credential from `memory/test_credentials.md`
+- `POST /api/auth/login` with a privately configured account credential
