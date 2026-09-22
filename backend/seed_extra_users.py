@@ -1,11 +1,11 @@
-"""One-off seed: create 3 demo users per RBAC role and export a credentials
-CSV to /app/downloads/. Idempotent — skips any email that already exists.
+"""Create optional demo users with runtime-generated credentials.
 
-Run with:  cd backend && python seed_extra_users.py
+No password is stored in source control. Generated credentials are written once
+to the local downloads directory for private distribution.
 """
 import asyncio
 import csv
-import os
+import secrets
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -14,40 +14,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent / ".env")
 
 from deps import db, hash_password
 
 USERS = [
-    # (name, email, password, role, extra_context)
-    # ---- Admin ----
-    ("Riya Sharma",       "riya.admin@assetnova.com",    "Riya@Admin2026",    "admin"),
-    ("Marcus Chen",       "marcus.admin@assetnova.com",  "Marcus@Admin2026",  "admin"),
-    ("Aisha Patel",       "aisha.admin@assetnova.com",   "Aisha@Admin2026",   "admin"),
-    # ---- Executive ----
-    ("Ellie Walsh",       "ellie.exec@assetnova.com",    "Ellie@Exec2026",    "executive"),
-    ("David Kim",         "david.exec@assetnova.com",    "David@Exec2026",    "executive"),
-    ("Sofia Rodriguez",   "sofia.exec@assetnova.com",    "Sofia@Exec2026",    "executive"),
-    # ---- Asset Manager ----
-    ("Alex Turner",       "alex.asset@assetnova.com",    "Alex@Asset2026",    "asset_manager"),
-    ("Priya Singh",       "priya.asset@assetnova.com",   "Priya@Asset2026",   "asset_manager"),
-    ("James Wilson",      "james.asset@assetnova.com",   "James@Asset2026",   "asset_manager"),
-    # ---- O&M Manager ----
-    ("Omar Ahmed",        "omar.ops@assetnova.com",      "Omar@Ops2026",      "om_manager"),
-    ("Lisa Chen",         "lisa.ops@assetnova.com",      "Lisa@Ops2026",      "om_manager"),
-    ("Raj Kumar",         "raj.ops@assetnova.com",       "Raj@Ops2026",       "om_manager"),
-    # ---- Technician ----
-    ("Tara Foster",       "tara.tech@assetnova.com",     "Tara@Tech2026",     "technician"),
-    ("Diego Silva",       "diego.tech@assetnova.com",    "Diego@Tech2026",    "technician"),
-    ("Nina Kowalski",     "nina.tech@assetnova.com",     "Nina@Tech2026",     "technician"),
-    # ---- Performance Engineer ----
-    ("Pat Miller",        "pat.perf@assetnova.com",      "Pat@Perf2026",      "performance_engineer"),
-    ("Wei Zhang",         "wei.perf@assetnova.com",      "Wei@Perf2026",      "performance_engineer"),
-    ("Ana Costa",         "ana.perf@assetnova.com",      "Ana@Perf2026",      "performance_engineer"),
-    # ---- Client Viewer ----
-    ("Chris Bennett",     "chris.client@assetnova.com",  "Chris@Client2026",  "client_viewer"),
-    ("Maya Johnson",      "maya.client@assetnova.com",   "Maya@Client2026",   "client_viewer"),
-    ("Robert Lee",        "robert.client@assetnova.com", "Robert@Client2026", "client_viewer"),
+    ("Riya Sharma", "riya.admin@assetnova.com", "admin"),
+    ("Ellie Walsh", "ellie.exec@assetnova.com", "executive"),
+    ("Alex Turner", "alex.asset@assetnova.com", "asset_manager"),
+    ("Omar Ahmed", "omar.ops@assetnova.com", "om_manager"),
+    ("Tara Foster", "tara.tech@assetnova.com", "technician"),
+    ("Pat Miller", "pat.perf@assetnova.com", "performance_engineer"),
+    ("Chris Bennett", "chris.client@assetnova.com", "client_viewer"),
 ]
 
 ROLE_LANDING = {
@@ -61,19 +40,19 @@ ROLE_LANDING = {
 }
 
 
-async def main():
-    created, skipped = 0, 0
+async def main() -> None:
+    solar = await db.fleet_sites.find(
+        {"site_type": "Utility-Scale Solar"}, {"_id": 0, "site_id": 1}
+    ).limit(20).to_list(20)
+    client_site_ids = [site["site_id"] for site in solar]
+    generated = []
 
-    # Seed client scope for client_viewer users (first 20 solar sites)
-    solar = await db.fleet_sites.find({"site_type": "Utility-Scale Solar"}, {"_id": 0, "site_id": 1}).limit(20).to_list(20)
-    client_site_ids = [s["site_id"] for s in solar]
-
-    for name, email, password, role in USERS:
+    for name, email, role in USERS:
         email = email.lower()
         if await db.users.find_one({"email": email}):
-            skipped += 1
             continue
-        doc = {
+        password = secrets.token_urlsafe(24)
+        document = {
             "id": str(uuid.uuid4()),
             "email": email,
             "password_hash": hash_password(password),
@@ -83,38 +62,24 @@ async def main():
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         if role == "client_viewer":
-            doc["client_scope"] = {
+            document["client_scope"] = {
                 "allowed_site_ids": client_site_ids,
                 "allowed_categories": [],
             }
-        await db.users.insert_one(doc)
-        created += 1
+        await db.users.insert_one(document)
+        generated.append((name, email, password, role))
 
-    # Export CSV
     downloads = Path(__file__).parent.parent / "downloads"
     downloads.mkdir(exist_ok=True)
-    csv_path = downloads / "assetnova-team-credentials.csv"
+    credentials_path = downloads / "assetnova-team-credentials.csv"
+    with credentials_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["Full Name", "Email", "One-time Password", "Role", "Landing Route"])
+        for name, email, password, role in generated:
+            writer.writerow([name, email, password, role, ROLE_LANDING[role]])
 
-    with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Full Name", "Email", "Password", "Role", "Landing Route", "Notes"])
-        role_label = {
-            "admin": "Administrator (super-user)",
-            "executive": "Executive (portfolio view)",
-            "asset_manager": "Asset Manager",
-            "om_manager": "O&M Manager",
-            "technician": "Field Technician (mobile)",
-            "performance_engineer": "Performance Engineer",
-            "client_viewer": "Client Viewer (read-only, scoped)",
-        }
-        for name, email, password, role in USERS:
-            writer.writerow([
-                name, email, password, role_label[role], ROLE_LANDING[role],
-                "Scoped to first 20 solar sites" if role == "client_viewer" else "",
-            ])
-
-    print(f"[SEED] Created {created} new users · Skipped {skipped} existing")
-    print(f"[SEED] Credentials CSV → {csv_path}")
+    print(f"[SEED] Created {len(generated)} users")
+    print(f"[SEED] Private credentials file: {credentials_path}")
 
 
 if __name__ == "__main__":

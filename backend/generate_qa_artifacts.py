@@ -40,7 +40,7 @@ ROLES = [
         "key": "admin",
         "name": "Administrator",
         "email": "admin@assetnova.com",
-        "password": "Admin@123",
+        "password": "configured privately",
         "landing": "/admin",
         "summary": "Super-user with unrestricted access. Manages users, roles, client scopes, and platform-wide configuration.",
         "permissions": [
@@ -54,7 +54,7 @@ ROLES = [
             ("Log in and land on /admin dashboard",
              ["Open the app in a browser",
               "Click 'Login' in the top-right",
-              "Enter admin@assetnova.com / Admin@123",
+              "Enter the administrator email and privately configured password",
               "Click 'Sign In'",
               "Verify redirect to /admin with KPI cards, Leads Inbox, User Management"]),
             ("Invite a new teammate",
@@ -91,7 +91,7 @@ ROLES = [
         "key": "executive",
         "name": "Executive",
         "email": "executive@assetnova.com",
-        "password": "Executive@123",
+        "password": "configured privately",
         "landing": "/overview",
         "summary": "Portfolio-level oversight. Consumes read-only KPIs across the entire fleet without operating on individual assets.",
         "permissions": [
@@ -100,7 +100,7 @@ ROLES = [
         ],
         "flows": [
             ("Portfolio health check",
-             ["Log in as executive@assetnova.com / Executive@123",
+             ["Log in with the privately configured executive demo account",
               "Land on /overview — verify Portfolio KPIs (health %, CO₂ avoided, revenue at risk)",
               "Verify the Mix-by-Category donut and Top Risks strip render live data"]),
             ("Compare live dashboard slices",
@@ -121,7 +121,7 @@ ROLES = [
         "key": "asset_manager",
         "name": "Asset Manager",
         "email": "assetmgr@assetnova.com",
-        "password": "Asset@123",
+        "password": "configured privately",
         "landing": "/dashboard",
         "summary": "Owns commercial performance of a portfolio segment. Deep-dives sites, triages alarms, and initiates actions.",
         "permissions": [
@@ -130,7 +130,7 @@ ROLES = [
         ],
         "flows": [
             ("Diagnose an underperforming site",
-             ["Log in as assetmgr@assetnova.com / Asset@123",
+             ["Log in with the privately configured asset-manager demo account",
               "On /dashboard sort the fleet table by PR% ascending",
               "Click the worst site to open /site/:site_id",
               "Verify 4 KPI cards, live-window telemetry chart, asset breakdown, alarms/WOs"]),
@@ -148,7 +148,7 @@ ROLES = [
         "key": "om_manager",
         "name": "O&M Manager",
         "email": "ops@assetnova.com",
-        "password": "Ops@123",
+        "password": "configured privately",
         "landing": "/operations",
         "summary": "Owns operational resolution. Runs the Operations Center — alarms triage, work order boards, resolution SLA.",
         "permissions": [
@@ -157,7 +157,7 @@ ROLES = [
         ],
         "flows": [
             ("Triage overnight alarms",
-             ["Log in as ops@assetnova.com / Ops@123",
+             ["Log in with the privately configured O&M-manager demo account",
               "Land on /operations — verify alarm feed, resolution rate, WO board",
               "Click a critical alarm → confirm it opens with root-cause + affected assets"]),
             ("Assign a work order to a technician",
@@ -171,7 +171,7 @@ ROLES = [
         "key": "technician",
         "name": "Field Technician",
         "email": "tech@assetnova.com",
-        "password": "Tech@123",
+        "password": "configured privately",
         "landing": "/my-work",
         "summary": "Mobile-first field operator. Sees only their assigned work; can complete diagnostic checklists and upload photo evidence.",
         "permissions": [
@@ -180,7 +180,7 @@ ROLES = [
         ],
         "flows": [
             ("Complete an assigned work order",
-             ["Log in as tech@assetnova.com / Tech@123 on a mobile viewport (390×844)",
+             ["Log in with the privately configured technician account on a mobile viewport (390×844)",
               "Land on /my-work — verify assigned alarm cards",
               "Tap an alarm to open the bottom-sheet Diagnose flow",
               "Tick each of the 4 checklist steps",
@@ -192,7 +192,7 @@ ROLES = [
         "key": "performance_engineer",
         "name": "Performance Engineer",
         "email": "perf@assetnova.com",
-        "password": "Perf@123",
+        "password": "configured privately",
         "landing": "/performance",
         "summary": "Diagnostic analytics specialist. Focused on Yield / Degradation / Loss / Data-Quality and root-cause patterns.",
         "permissions": [
@@ -201,7 +201,7 @@ ROLES = [
         ],
         "flows": [
             ("Investigate a degradation trend",
-             ["Log in as perf@assetnova.com / Perf@123",
+             ["Log in with the privately configured performance-engineer demo account",
               "Land on /performance — verify 4 stat tiles (Yield, Degradation, Loss, Data-Quality)",
               "Scan the worst-PR% benchmarking table",
               "Click a site to open Site Detail and cross-check the telemetry trend"]),
@@ -214,7 +214,7 @@ ROLES = [
         "key": "client_viewer",
         "name": "Client Viewer",
         "email": "client@assetnova.com",
-        "password": "Client@123",
+        "password": "configured privately",
         "landing": "/client-portal",
         "summary": "External read-only guest scoped to a subset of sites by the Admin. Sees no other portfolio data.",
         "permissions": [
@@ -223,7 +223,7 @@ ROLES = [
         ],
         "flows": [
             ("View scoped portfolio",
-             ["Log in as client@assetnova.com / Client@123",
+             ["Log in with the privately configured client-viewer demo account",
               "Land on /client-portal — verify 20 solar site tiles + 4 aggregate KPI cards",
               "Try navigating to /admin — verify 403 or redirect",
               "Try navigating to /dashboard — verify redirect back to /client-portal"]),
@@ -488,7 +488,7 @@ def _build_test_cases():
     # ---- Client Viewer ----
     add("Client Viewer", "Client Portal", "Client sees only scoped sites",
         "Admin has scoped this client to 20 solar sites",
-        ["Log in as client@assetnova.com / Client@123"],
+        ["Log in with the privately configured client-viewer demo account"],
         "/client-portal shows exactly 20 site tiles + aggregate KPIs", "P0")
 
     # ---- AI ----

@@ -162,5 +162,5 @@ The 4.3 MB Excel file must ship inside `backend/data/`. If missing, the seed
 skips gracefully and Mongo stays empty. Fix: re-push code with the data file.
 
 **Login says "Invalid credentials"** → The seeded admin uses `ADMIN_EMAIL` +
-`ADMIN_PASSWORD` from the backend env. Not the demo `Admin@123` unless you
-explicitly set `ADMIN_PASSWORD=Admin@123`.
+Use the `ADMIN_PASSWORD` value stored in Railway's backend service variables.
+Never place that value in documentation, source control, or screenshots.
