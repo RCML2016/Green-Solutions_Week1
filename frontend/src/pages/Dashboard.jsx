@@ -12,6 +12,7 @@ import SitesTable from "@/components/dashboard/SitesTable";
 import AlarmsFeed from "@/components/dashboard/AlarmsFeed";
 import WorkOrdersCard from "@/components/dashboard/WorkOrdersCard";
 import AiInsightPanel from "@/components/dashboard/AiInsightPanel";
+import OmAnalytics from "@/components/dashboard/OmAnalytics";
 import OnboardingTour from "@/components/OnboardingTour";
 
 const REFRESH_MS = 5000;
@@ -226,6 +227,8 @@ export default function Dashboard() {
           <AiInsightPanel ref={aiPanelRef} findings={findings} />
         </div>
       )}
+
+      {kpis && <div className="mt-8"><OmAnalytics kpis={kpis} category={category} /></div>}
 
       {kpis && <OnboardingTour />}
     </div>
