@@ -58,6 +58,23 @@ curl http://localhost:8080/connectors
 - Add OpenTelemetry traces and Prometheus counters for freshness, lag, invalid rate, duplicates and DLQ age.
 - Pin container images to approved digests and run vulnerability/SBOM checks in CI.
 
+## First working pilot: Solar SCADA CSV
+
+The main AssetNova FastAPI application exposes an admin-only pilot workflow at
+`/api/integrations/*`, with the UI at `/integrations`. It uses the current MongoDB
+deployment for raw events, canonical telemetry, run history, health metrics and DLQ
+records. The workflow is:
+
+1. Bootstrap a demo mapping to one existing Solar site and asset, or save a customer mapping.
+2. Download the mapped sample CSV.
+3. Run validation-only upload.
+4. Commit the same CSV to canonical storage.
+5. Review Integration Health and replay corrected DLQ records.
+
+This CSV protocol is the pilot bridge for redacted customer historian exports. A live
+OPC UA adapter can replace the source later without changing the mapping, canonical
+event, idempotency, monitoring or DLQ contract.
+
 ## Package layout
 
 ```text
@@ -72,4 +89,3 @@ src/assetnova_connectors/
 tests/           connector and failure-path tests
 config/          example connector and mapping configuration
 ```
-

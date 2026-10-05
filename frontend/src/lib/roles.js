@@ -12,6 +12,7 @@ import {
   Home, LayoutDashboard, Bell, Wrench, ClipboardList, Users, MessageSquare,
   Layers, Cpu, Workflow, Mail, UserPlus, ShieldCheck, Briefcase, Activity,
   LineChart, Eye, Info, PhoneCall, Sparkles, Package, Settings,
+  PlugZap,
 } from "lucide-react";
 
 export const ROLES = {
@@ -62,6 +63,7 @@ export const APP_NAV = [
   { to: "/work-orders",  label: "Work Orders",      icon: Wrench,          allow: ["om_manager", "technician", "asset_manager"] },
   { to: "/reports",      label: "Reports",          icon: Mail,            allow: ["executive", "asset_manager", "om_manager"] },
   { to: "/admin",        label: "Administration",   icon: ShieldCheck,     allow: [] },  // admin only via super-role
+  { to: "/integrations", label: "Integration Health", icon: PlugZap,         allow: [] },  // admin only
 ];
 
 /**

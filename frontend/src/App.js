@@ -33,6 +33,7 @@ import Assets from "@/pages/Assets";
 import AiIntelligence from "@/pages/AiIntelligence";
 import WorkOrders from "@/pages/WorkOrders";
 import FleetAdmin from "@/pages/FleetAdmin";
+import IntegrationHealth from "@/pages/IntegrationHealth";
 import { landingFor } from "@/lib/roles";
 
 function Protected({ children, allow }) {
@@ -110,6 +111,9 @@ function App() {
             } />
             <Route path="/qa-tracker" element={
               <Protected allow={["admin"]}><QaTracker /></Protected>
+            } />
+            <Route path="/integrations" element={
+              <Protected allow={["admin"]}><IntegrationHealth /></Protected>
             } />
             <Route path="/performance" element={
               <Protected allow={["performance_engineer", "asset_manager"]}><FeatureProtected feature="performance"><PerformanceAnalytics /></FeatureProtected></Protected>

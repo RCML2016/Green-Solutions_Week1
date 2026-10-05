@@ -30,6 +30,7 @@ from routers.fleet import router as fleet_router
 from routers.rbac_ext import router as rbac_router, team_router, client_router, evidence_router
 from routers.qa import router as qa_router
 from routers.fleet_admin import router as fleet_admin_router
+from routers.integrations import router as integrations_router
 from workspace import router as workspace_router
 
 
@@ -116,6 +117,7 @@ api_router.include_router(client_router)
 api_router.include_router(evidence_router)
 api_router.include_router(qa_router)
 api_router.include_router(fleet_admin_router)
+api_router.include_router(integrations_router)
 api_router.include_router(workspace_router)
 
 app.include_router(api_router)
@@ -162,6 +164,14 @@ async def startup():
     await db.fleet_audit_log.create_index("timestamp")
     await db.workspace_config.create_index("id", unique=True)
     await db.workspace_audit.create_index("at")
+    await db.integration_mappings.create_index("connector_id", unique=True)
+    await db.integration_canonical_events.create_index("idempotency_key", unique=True)
+    await db.integration_canonical_events.create_index([("site_id", 1), ("event_ts", -1)])
+    await db.integration_raw_events.create_index([("connector_id", 1), ("received_at", -1)])
+    await db.integration_runs.create_index([("connector_id", 1), ("completed_at", -1)])
+    await db.integration_connectors.create_index("connector_id", unique=True)
+    await db.integration_dlq.create_index("id", unique=True)
+    await db.integration_dlq.create_index([("status", 1), ("failed_at", -1)])
 
     # Seed admin only when a deployment secret is explicitly configured.
     # Existing accounts are never reset to a known password during startup.
